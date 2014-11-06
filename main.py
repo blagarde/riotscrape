@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 import sys
 from collections import deque
 from itertools import cycle
@@ -48,7 +49,7 @@ class Scraper(object):
     uq = deque()
     gq = deque()
     def __init__(self):
-        self.WATCHERS = [RiotWatcher(k, limits=(RateLimit(10, 10), RateLimit(500, 600), )) for k in KEYS]
+        self.WATCHERS = [RiotWatcher(k, limits=(RateLimit(10, 10), RateLimit(500, 600))) for k in KEYS]
         self.watchers = cycle(self.WATCHERS)
         self.watcher = next(self.watchers)
         print("API KEY STATUS")
@@ -57,10 +58,10 @@ class Scraper(object):
 
         challengers = self.get_challengers()
         self.uq += [c for c in challengers if c not in self.users]
+        if os.path.exists(GAMES_FILE):
+            self.games |= set([l.rstrip() for l in open(GAMES_FILE)])
 
     def scrape(self):
-        from datetime import datetime
-        start = datetime.now()
         while True:
             while not self.watcher.can_make_request():
                 self.watcher = next(self.watchers)
@@ -103,6 +104,8 @@ class Scraper(object):
         self.es.index(index="lbdriot", doc_type="game", id=gameid, body=dumpme)
         self.uq += [dct['player']['summonerId'] for dct in dumpme['participantIdentities'] if dct['player']['summonerId'] not in self.users]
         self.games |= set([gameid])
+        with open(GAMES_FILE, 'a') as gf:
+            gf.write('%s\n' % gameid)
 
 
 if __name__ == "__main__":
