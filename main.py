@@ -3,9 +3,9 @@ import sys
 from collections import deque
 from itertools import cycle
 from time import sleep
-from config import KEYS
-from riotwatcher.riotwatcher import RiotWatcher, EUROPE_WEST, LoLException
-
+from config import KEYS, ES_NODES
+from riotwatcher.riotwatcher import RiotWatcher, EUROPE_WEST, LoLException, RateLimit
+from elasticsearch import Elasticsearch
 
 USERS_FILE = 'users.txt'
 GAMES_FILE = 'games.txt'
@@ -34,7 +34,7 @@ def squelch_errors(method):
                 raise e
             except Exception as e:
                 tpl = (fn.__name__, e.__class__.__name__, str(e))
-                sys.stderr.write("Exception squelched inside '%s': %s (%s)" % tpl)
+                sys.stderr.write("Exception squelched inside '%s': %s (%s)\n" % tpl)
                 sys.stderr.flush()
                 pass
         return run
@@ -42,22 +42,25 @@ def squelch_errors(method):
 
 
 class Scraper(object):
+    es = Elasticsearch(ES_NODES)
     games = set()
     users = set()
     uq = deque()
     gq = deque()
     def __init__(self):
-        WATCHERS = [RiotWatcher(k) for k in KEYS]
-        self.watchers = cycle(WATCHERS)
+        self.WATCHERS = [RiotWatcher(k, limits=(RateLimit(10, 10), RateLimit(500, 600), )) for k in KEYS]
+        self.watchers = cycle(self.WATCHERS)
         self.watcher = next(self.watchers)
         print("API KEY STATUS")
-        for w in WATCHERS:
+        for w in self.WATCHERS:
             print("%s\t%s" % (w.key, w.can_make_request()))
 
         challengers = self.get_challengers()
         self.uq += [c for c in challengers if c not in self.users]
 
     def scrape(self):
+        from datetime import datetime
+        start = datetime.now()
         while True:
             while not self.watcher.can_make_request():
                 self.watcher = next(self.watchers)
@@ -68,6 +71,7 @@ class Scraper(object):
                 try:
                     self.do_user()
                 except EmptyUserQueue:
+                    print("empty user Q")
                     continue
             except LoLException:
                 sleep(10)
@@ -96,8 +100,7 @@ class Scraper(object):
         except IndexError as e:
             raise EmptyGameQueue(e)
         dumpme = self.watcher.get_match(gameid, region=EUROPE_WEST, include_timeline=True)
-        #self.es.index(dumpme)
-        print(gameid)
+        self.es.index(index="lbdriot", doc_type="game", id=gameid, body=dumpme)
         self.uq += [dct['player']['summonerId'] for dct in dumpme['participantIdentities'] if dct['player']['summonerId'] not in self.users]
         self.games |= set([gameid])
 
