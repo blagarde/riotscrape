@@ -151,6 +151,7 @@ class Scraper(object):
                     self.user_lock.acquire()
                     userid = self.users[self.user_index]
                     self.user_index += 1
+                    self.user_index = self.user_index % 1000000
                     self.user_lock.release()
                     yield ('user', userid)
                 except IndexError as e:  # Very unlikely. Would only happen if we run out of users before running out of games
