@@ -52,3 +52,10 @@ docs/_build/
 
 # PyBuilder
 target/
+
+config.py
+.pydevproject
+.project
+
+# Apparently some people still use Eclipse... 
+org.eclipse.core.resources.prefs
