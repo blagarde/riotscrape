@@ -48,9 +48,9 @@ class WatcherThread(Thread):
                 assert taskname in ('user', 'game')
                 task = getattr(self, 'do_' + taskname)
                 try:
+                    #print(str(self.scraper))
                     task(arg)
                     self.scraper.reqs += 1
-                    print(str(self.scraper) + ' %s (%s)' % (taskname, arg))
                 except LoLException:
                     stderr.write("whoopsies (%s)" % self.watcher.key)
             sleep(0.001)
@@ -67,7 +67,7 @@ class WatcherThread(Thread):
     @squelch_errors
     def do_game(self, gameid):
         dumpme = self.watcher.get_match(gameid, region=EUROPE_WEST, include_timeline=True)
-        ES.index(index="riot", doc_type="game", id=gameid, body=dumpme)
+        ES.index(index="rito", doc_type="game", id=gameid, body=dumpme)
         self._log_game(gameid)
         participants = [dct['player']['summonerId'] for dct in dumpme['participantIdentities']]
         self._add_users(participants)
@@ -106,7 +106,8 @@ class Scraper(object):
     # Locks for access to the files
     game_lock = Lock()
     user_lock = Lock()
-
+    fifthlock = Lock()
+    
     reqs = 0
     def __init__(self, challenger_seed=True):
         self.threads = [WatcherThread(key, self) for key in KEYS]
@@ -138,8 +139,14 @@ class Scraper(object):
         while True:
             assert set(self.users) == self.user_set
             try:
-                yield ('game', self.gq.popleft())
+                gameid = self.gq.popleft()
+                self.fifthlock.acquire()
+                res = ('game', gameid)
+                self.games.add(gameid)
+                self.fifthlock.release()
+                yield res
             except IndexError as e:
+                print e
                 try:
                     self.user_lock.acquire()
                     userid = self.users[self.user_index]
@@ -152,12 +159,16 @@ class Scraper(object):
                     # Wait a while, hope that some pending requests will succeed and fill the queue
 
     def __str__(self):
-        fmt = "\t".join(["%s"] * (len(self.threads) + 6))
+        fmt = "\t".join(["%s"] * (5))
         # out = fmt % tuple(list(range(len(self.threads))) + ['Users', 'Games', 'Index'])
-        out = fmt % tuple([t.watcher.can_make_request() for t in self.threads] + [len(self.users), len(self.user_set), len(self.games), len(self.gq), self.user_index, self.reqs])
+        out = fmt % tuple([len(self.users), len(self.games), len(self.gq), self.user_index, self.reqs])
         return out
-
 
 if __name__ == "__main__":
     s = Scraper()
     s.scrape()
+
+def get_game_ids(self):
+    request = {}
+    scan = helpers.scan(client=self.es, query=req, scroll="5m", index="lbdriot", doc_type="game")
+    return (r["_id"] for r in scan)
