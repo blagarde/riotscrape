@@ -54,6 +54,8 @@ docs/_build/
 target/
 
 config.py
+.pydevproject
+.pydev
 
 # Apparently some people still use Eclipse... 
 org.eclipse.core.resources.prefs
