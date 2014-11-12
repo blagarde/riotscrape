@@ -12,7 +12,7 @@ from elasticsearch import Elasticsearch
 USERS_FILE = 'users.txt'
 GAMES_FILE = 'games.txt'
 ES = Elasticsearch(ES_NODES)
-MAX_USERS = 400
+MAX_USERS = 1000000
 
 
 def squelch_errors(method):
@@ -136,7 +136,6 @@ class Scraper(object):
     def taskgen(self):
         '''Scraping strategy lives here'''
         while True:
-            assert set(self.users) == self.user_set
             try:
                 gameid = self.gq.popleft()
                 self.fifthlock.acquire()
@@ -147,9 +146,10 @@ class Scraper(object):
             except IndexError:
                 try:
                     self.user_lock.acquire()
+                    assert set(self.users) == self.user_set
                     userid = self.users[self.user_index]
                     self.user_index += 1
-                    self.user_index = self.user_index % 1000000
+                    self.user_index = self.user_index % MAX_USERS
                     self.user_lock.release()
                     yield ('user', userid)
                 except IndexError:  # Very unlikely. Would only happen if we run out of users before running out of games
