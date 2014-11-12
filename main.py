@@ -2,9 +2,8 @@
 import os
 import sys
 from time import sleep
-from collections import deque, OrderedDict
 from threading import Thread, Lock
-
+from collections import deque
 from config import KEYS, ES_NODES
 from riotwatcher.riotwatcher import RiotWatcher, EUROPE_WEST, LoLException, RateLimit
 from elasticsearch import Elasticsearch
@@ -48,11 +47,10 @@ class WatcherThread(Thread):
                 assert taskname in ('user', 'game')
                 task = getattr(self, 'do_' + taskname)
                 try:
-                    #print(str(self.scraper))
                     task(arg)
                     self.scraper.reqs += 1
                 except LoLException:
-                    stderr.write("whoopsies (%s)" % self.watcher.key)
+                    sys.stderr.write("whoopsies (%s)" % self.watcher.key)
             sleep(0.001)
 
     @squelch_errors
@@ -107,8 +105,9 @@ class Scraper(object):
     game_lock = Lock()
     user_lock = Lock()
     fifthlock = Lock()
-    
+
     reqs = 0
+
     def __init__(self, challenger_seed=True):
         self.threads = [WatcherThread(key, self) for key in KEYS]
         self.user_index = 0
@@ -129,7 +128,7 @@ class Scraper(object):
     def scrape(self):
         for t in self.threads:
             t.start()
-    
+
     def get_challengers(self, watcher):
         league_dct = watcher.get_challenger(region=EUROPE_WEST)
         return [e['playerOrTeamId'] for e in league_dct['entries']]
@@ -145,8 +144,7 @@ class Scraper(object):
                 self.games.add(gameid)
                 self.fifthlock.release()
                 yield res
-            except IndexError as e:
-                print e
+            except IndexError:
                 try:
                     self.user_lock.acquire()
                     userid = self.users[self.user_index]
@@ -154,7 +152,7 @@ class Scraper(object):
                     self.user_index = self.user_index % 1000000
                     self.user_lock.release()
                     yield ('user', userid)
-                except IndexError as e:  # Very unlikely. Would only happen if we run out of users before running out of games
+                except IndexError:  # Very unlikely. Would only happen if we run out of users before running out of games
                     self.user_index = 0
                     sleep(0.001)
                     # Wait a while, hope that some pending requests will succeed and fill the queue
@@ -165,11 +163,7 @@ class Scraper(object):
         out = fmt % tuple([len(self.users), len(self.games), len(self.gq), self.user_index, self.reqs])
         return out
 
+
 if __name__ == "__main__":
     s = Scraper()
     s.scrape()
-
-def get_game_ids(self):
-    request = {}
-    scan = helpers.scan(client=self.es, query=req, scroll="5m", index="lbdriot", doc_type="game")
-    return (r["_id"] for r in scan)
