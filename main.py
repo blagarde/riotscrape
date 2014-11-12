@@ -84,6 +84,7 @@ class WatcherThread(Thread):
             if uid not in self.scraper.user_set:
                 self.scraper.users += [uid]
                 self.scraper.user_set |= set([uid])
+                self._log_user(uid)
         self.scraper.user_queue_lock.release()
 
     def _log_game(self, gameid):
@@ -91,6 +92,10 @@ class WatcherThread(Thread):
         with open(GAMES_FILE, 'a') as gf:
             gf.write('%s\n' % gameid)
         self.scraper.game_lock.release()
+
+    def _log_user(self, uid):
+        with open(USERS_FILE, 'a') as uf:
+            uf.write('%s\n' % uid)
 
 
 class Scraper(object):
@@ -124,6 +129,9 @@ class Scraper(object):
         print("**START**")
         if os.path.exists(GAMES_FILE):
             self.games |= set([l.rstrip() for l in open(GAMES_FILE)])
+        if os.path.exists(USERS_FILE):
+            self.users |= [l.rstrip() for l in open(USERS_FILE)]
+            self.user_set |= set(self.users)
 
     def scrape(self):
         for t in self.threads:
@@ -152,6 +160,8 @@ class Scraper(object):
                     self.user_index = self.user_index % MAX_USERS
                     self.user_lock.release()
                     yield ('user', userid)
+                except AssertionError:
+                    sys.stderr.write("weird... set(self.users) != self.user_set. Lengths: %s != %s" % (len(set(self.users)), len(self.user_set)))
                 except IndexError:  # Very unlikely. Would only happen if we run out of users before running out of games
                     self.user_index = 0
                     sleep(0.001)
