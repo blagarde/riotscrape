@@ -130,7 +130,7 @@ class Scraper(object):
         if os.path.exists(GAMES_FILE):
             self.games |= set([l.rstrip() for l in open(GAMES_FILE)])
         if os.path.exists(USERS_FILE):
-            self.users |= [l.rstrip() for l in open(USERS_FILE)]
+            self.users += [l.rstrip() for l in open(USERS_FILE)]
             self.user_set |= set(self.users)
 
     def scrape(self):
