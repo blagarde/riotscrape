@@ -5,26 +5,24 @@ from config import ES_NODES, RIOT_INDEX, RIOT_DOCTYPE
 from feature_extractor import FeatureExtractor
 
 
-class GameExtractor(object):
+class GameCruncher(object):
     ES = Elasticsearch(ES_NODES)
     FE = [FeatureExtractor,]
-
-    def __init__(self):
-        self.xgames = self.extract_games()
 
     def extract_games(self):
         scan = helpers.scan(client=self.ES, query={}, scroll="5m", index=RIOT_INDEX, doc_type=RIOT_DOCTYPE)
         for game in scan:
             yield game
 
-    def insert_team(self):
-        pass
+    def insert_team(self, team):
+        self.ES.index(RIOT_INDEX, doc_type=RIOT_DOCTYPE, body=team)
 
     def process(self):
-        for game in self.xgames:
-            temp = dict()
+        for game in self.extract_games():
+            temp = {}
             for fe in self.FE:
                 temp = fe(game,temp)
             # insert in elasticsearch
-
+            for v in temp:
+                self.insert_team(v)
 
