@@ -51,6 +51,7 @@ class Tasks(object):
             if cls.gq.empty():
                 res = ('user', cls.users[cls.user_index])
                 cls.user_index += 1
+                cls.user_index %= MAX_USERS
             else:
                 res = ('game', cls.gq.get())
         return res
@@ -66,7 +67,7 @@ class Tasks(object):
     @classmethod
     def put_user(cls, uid):
         with cls.lock:
-            if uid not in cls.users:
+            if uid not in cls.users and len(cls.users) < MAX_USERS:
                 cls.users += [uid]
                 cls.user_set |= set([uid])
                 cls._log_user(uid)
