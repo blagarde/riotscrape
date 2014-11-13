@@ -3,6 +3,7 @@ __author__ = 'william'
 from elasticsearch import helpers, Elasticsearch
 from config import ES_NODES, RIOT_INDEX, RIOT_DOCTYPE
 from feature_extractor import FeatureExtractor
+from game import Game
 
 
 class UserCruncher(object):
@@ -19,20 +20,18 @@ class UserCruncher(object):
         for game in scan:
             yield game['_source']
 
-    def insert_user(self,user):
-        self.ES.index(RIOT_INDEX, doc_type=RIOT_DOCTYPE, id=user["id"], body=user)
+    def insert_user(self, user):
+        self.ES.index(RIOT_INDEX, doc_type=RIOT_DOCTYPE, body=user)
 
     def process(self):
         for user_id in self.USERS_ID:
+            user = self.get_user(user_id)
             xgames = self.extract_games(user_id)
-            user = self.extract_user(user_id)
-            aggr_data = user["aggregate_data"] if "aggregate_data" in user else {}
-            for fe in self.FE:
-                fe(aggr_data, xgames)
-            user["aggregate_data"] = aggr_data
+            games = [Game(dct) for dct in xgames]
+            for f in self.FE:
+                user = f.apply(user, games)
             self.insert_user(user)
 
-
     @staticmethod
-    def write_query( user_id):
-        return {'query': {'filtered': {'filter':{'term': {"participantIdentities.player.summonerId": user_id}}}}}
+    def write_query(user_id):
+        return {'query': {'filtered': {'filter': {'term': {"participantIdentities.player.summonerId": user_id}}}}}
