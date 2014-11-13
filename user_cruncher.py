@@ -3,6 +3,7 @@ __author__ = 'william'
 from elasticsearch import helpers, Elasticsearch
 from config import ES_NODES, RIOT_INDEX, RIOT_DOCTYPE
 from feature_extractor import FeatureExtractor
+from game import Game
 
 
 class UserCruncher(object):
@@ -24,7 +25,12 @@ class UserCruncher(object):
 
     def process(self):
         for user_id in self.USERS_ID:
+            user = self.get_user(user_id)
             xgames = self.extract_games(user_id)
+            games = [Game(dct) for dct in xgames]
+            for f in self.FE:
+                user = f.apply(user, games)
+            self.insert_user(user)
 
     @staticmethod
     def write_query(user_id):
