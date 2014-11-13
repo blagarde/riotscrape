@@ -19,14 +19,13 @@ class UserCruncher(object):
         for game in scan:
             yield game['_source']
 
-    def insert_user(self,user):
+    def insert_user(self, user):
         self.ES.index(RIOT_INDEX, doc_type=RIOT_DOCTYPE, body=user)
 
     def process(self):
         for user_id in self.USERS_ID:
             xgames = self.extract_games(user_id)
 
-
     @staticmethod
-    def write_query( user_id):
-        return {'query': {'filtered': {'filter':{'term': {"participantIdentities.player.summonerId": user_id}}uc = UserCruncher}}}
+    def write_query(user_id):
+        return {'query': {'filtered': {'filter': {'term': {"participantIdentities.player.summonerId": user_id}}}}}
