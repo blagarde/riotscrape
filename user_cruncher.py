@@ -29,4 +29,4 @@ class UserCruncher(object):
 
     @staticmethod
     def write_query( user_id):
-        return {'query': {'filtered': {'filter':{'term': {"participantIdentities.player.summonerId": user_id}}uc = UserCruncher}}}
+        return {'query': {'filtered': {'filter':{'term': {"participantIdentities.player.summonerId": user_id}}}}}
