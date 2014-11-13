@@ -14,8 +14,8 @@ class GameCruncher(object):
         for game in scan:
             yield game
 
-    def insert_team(self, team):
-        self.ES.index(RIOT_INDEX, doc_type=RIOT_DOCTYPE, body=team)
+    def insert_user(self,user):
+        self.ES.index(RIOT_INDEX, doc_type=RIOT_DOCTYPE, body=user)
 
     def process(self):
         for game in self.extract_games():
@@ -24,5 +24,5 @@ class GameCruncher(object):
                 temp = fe(game,temp)
             # insert in elasticsearch
             for v in temp:
-                self.insert_team(v)
+                self.insert_user(v)
 
