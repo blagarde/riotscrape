@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
-from time import sleep
 from threading import Thread, Lock
-from collections import deque
+from queue import Queue
 from config import KEYS, ES_NODES
-from riotwatcher.riotwatcher import RiotWatcher, EUROPE_WEST, LoLException, RateLimit
+from riotwatcher.riotwatcher import RiotWatcher, EUROPE_WEST, RateLimit
 from elasticsearch import Elasticsearch
 
 
@@ -33,25 +32,68 @@ def squelch_errors(method):
     return raising(method)
 
 
+class Tasks(object):
+    games = set()
+    gq = Queue()
+    users = []
+    user_set = set()
+    lock = Lock()
+    user_index = 0
+
+    @classmethod
+    def get(cls):
+        res = None
+        cls.lock.acquire()
+        if cls.gq.empty():
+            res = ('user', cls.users[cls.user_index])
+            cls.user_index += 1
+        else:
+            res = ('game', cls.gq.get())
+        cls.lock.release()
+        return res
+
+    @classmethod
+    def put_game(cls, gameid):
+        cls.lock.acquire()
+        if gameid not in cls.games:
+            cls.gq.put(gameid)
+            cls.games |= set([gameid])
+            cls._log_game(gameid)
+        cls.lock.release()
+
+    @classmethod
+    def put_user(cls, uid):
+        cls.lock.acquire()
+        if uid not in cls.users:
+            cls.users += [uid]
+            cls.user_set |= set([uid])
+            cls._log_user(uid)
+        cls.lock.release()
+
+    @classmethod
+    def _log_game(cls, gameid):
+        with open(GAMES_FILE, 'a') as gf:
+            gf.write('%s\n' % gameid)
+
+    @classmethod
+    def _log_user(cls, uid):
+        with open(USERS_FILE, 'a') as uf:
+            uf.write('%s\n' % uid)
+
+
 class WatcherThread(Thread):
-    def __init__(self, key, scraper, *args, **kwargs):
+
+    def __init__(self, key, *args, **kwargs):
         self.watcher = RiotWatcher(key, limits=(RateLimit(10, 10), RateLimit(500, 600)))
-        self.scraper = scraper
-        self.taskgen = scraper.taskgen()
         super(WatcherThread, self).__init__(*args, **kwargs)
 
     def run(self):
         while True:
             if self.watcher.can_make_request():
-                taskname, arg = next(self.taskgen)
+                taskname, arg = Tasks.get()
                 assert taskname in ('user', 'game')
                 task = getattr(self, 'do_' + taskname)
-                try:
-                    task(arg)
-                    self.scraper.reqs += 1
-                except LoLException:
-                    sys.stderr.write("whoopsies (%s)" % self.watcher.key)
-            sleep(0.001)
+                task(arg)
 
     @squelch_errors
     def do_user(self, userid):
@@ -60,78 +102,39 @@ class WatcherThread(Thread):
             fellow_players = [dct['summonerId'] for dct in game_dct['fellowPlayers']]
             self._add_users(fellow_players)
             gameid = game_dct['gameId']
-            self._add_game(gameid)
+            Tasks.put_game(gameid)
 
     @squelch_errors
     def do_game(self, gameid):
         dumpme = self.watcher.get_match(gameid, region=EUROPE_WEST, include_timeline=True)
         ES.index(index="rito", doc_type="game", id=gameid, body=dumpme)
-        self._log_game(gameid)
         participants = [dct['player']['summonerId'] for dct in dumpme['participantIdentities']]
         self._add_users(participants)
 
-    def _add_game(self, gameid):
-        self.scraper.game_queue_lock.acquire()
-        if gameid not in self.scraper.games:
-            self.scraper.gq += [gameid]
-            self.scraper.games |= set([gameid])
-        self.scraper.game_queue_lock.release()
-
     def _add_users(self, usr_lst):
-        # This lock is necessary to guarantee uniqueness and thread safety:
-        self.scraper.user_queue_lock.acquire()
         for uid in usr_lst:
-            if uid not in self.scraper.user_set:
-                self.scraper.users += [uid]
-                self.scraper.user_set |= set([uid])
-                self._log_user(uid)
-        self.scraper.user_queue_lock.release()
-
-    def _log_game(self, gameid):
-        self.scraper.game_lock.acquire()
-        with open(GAMES_FILE, 'a') as gf:
-            gf.write('%s\n' % gameid)
-        self.scraper.game_lock.release()
-
-    def _log_user(self, uid):
-        with open(USERS_FILE, 'a') as uf:
-            uf.write('%s\n' % uid)
+            Tasks.put_user(uid)
 
 
 class Scraper(object):
-    games = set()
-    users = []
-    user_set = set()
-    gq = deque()
-
-    user_queue_lock = Lock()
-    game_queue_lock = Lock()
-    # Locks for access to the files
-    game_lock = Lock()
-    user_lock = Lock()
-    fifthlock = Lock()
-
-    reqs = 0
-
     def __init__(self, challenger_seed=True):
-        self.threads = [WatcherThread(key, self) for key in KEYS]
-        self.user_index = 0
+        self.threads = [WatcherThread(key) for key in KEYS]
         print("API KEY STATUS")
         print(self)
 
         if challenger_seed:
             watcher = self.threads[0].watcher
             challengers = self.get_challengers(watcher)
-            new_challengers = [c for c in challengers if c not in self.users]
-            self.users = new_challengers
-            self.user_set = set(new_challengers)
+            new_challengers = [c for c in challengers if c not in Tasks.users]
+            Tasks.users = new_challengers
+            Tasks.user_set = set(new_challengers)
         print(self)
         print("**START**")
         if os.path.exists(GAMES_FILE):
-            self.games |= set([l.rstrip() for l in open(GAMES_FILE)])
+            Tasks.games |= set([l.rstrip() for l in open(GAMES_FILE) if l.strip() != ''])
         if os.path.exists(USERS_FILE):
-            self.users += [l.rstrip() for l in open(USERS_FILE)]
-            self.user_set |= set(self.users)
+            Tasks.users += [l.rstrip() for l in open(USERS_FILE) if l.strip() != '']
+            Tasks.user_set |= set(Tasks.users)
 
     def scrape(self):
         for t in self.threads:
@@ -141,36 +144,10 @@ class Scraper(object):
         league_dct = watcher.get_challenger(region=EUROPE_WEST)
         return [e['playerOrTeamId'] for e in league_dct['entries']]
 
-    def taskgen(self):
-        '''Scraping strategy lives here'''
-        while True:
-            try:
-                gameid = self.gq.popleft()
-                self.fifthlock.acquire()
-                res = ('game', gameid)
-                self.games.add(gameid)
-                self.fifthlock.release()
-                yield res
-            except IndexError:
-                try:
-                    self.user_lock.acquire()
-                    assert set(self.users) == self.user_set
-                    userid = self.users[self.user_index]
-                    self.user_index += 1
-                    self.user_index = self.user_index % MAX_USERS
-                    self.user_lock.release()
-                    yield ('user', userid)
-                except AssertionError:
-                    sys.stderr.write("weird... set(self.users) != self.user_set. Lengths: %s != %s" % (len(set(self.users)), len(self.user_set)))
-                except IndexError:  # Very unlikely. Would only happen if we run out of users before running out of games
-                    self.user_index = 0
-                    sleep(0.001)
-                    # Wait a while, hope that some pending requests will succeed and fill the queue
-
     def __str__(self):
-        fmt = "\t".join(["%s"] * (5))
+        fmt = "\t".join(["%s"] * (4))
         # out = fmt % tuple(list(range(len(self.threads))) + ['Users', 'Games', 'Index'])
-        out = fmt % tuple([len(self.users), len(self.games), len(self.gq), self.user_index, self.reqs])
+        out = fmt % tuple([len(Tasks.users), len(Tasks.games), Tasks.gq.qsize(), Tasks.user_index])
         return out
 
 
