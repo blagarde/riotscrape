@@ -1,7 +1,7 @@
 __author__ = 'william'
 
 from elasticsearch import helpers, Elasticsearch
-from config import ES_NODES, RIOT_INDEX, RIOT_DOCTYPE
+from config import ES_NODES, RIOT_INDEX, GAME_DOCTYPE, USER_DOCTYPE
 from feature_extractor import FeatureExtractor
 from game import Game
 
@@ -16,12 +16,15 @@ class UserCruncher(object):
             USERS_ID.add(user_id)
 
     def extract_games(self, user_id):
-        scan = helpers.scan(client=self.ES, query=self.write_query(user_id), scroll="5m", index=RIOT_INDEX, doc_type=RIOT_DOCTYPE)
+        scan = helpers.scan(client=self.ES, query=self.write_query(user_id), scroll="5m", index=RIOT_INDEX, doc_type=GAME_DOCTYPE)
         for game in scan:
             yield game['_source']
 
     def insert_user(self, user):
-        self.ES.index(RIOT_INDEX, doc_type=RIOT_DOCTYPE, body=user)
+        self.ES.index(RIOT_INDEX, doc_type=USER_DOCTYPE, body=user)
+
+    def get_user(self,user_id):
+        return self.ES.get( index=RIOT_INDEX, doc_type=USER_DOCTYPE, id=user_id)
 
     def process(self):
         for user_id in self.USERS_ID:
