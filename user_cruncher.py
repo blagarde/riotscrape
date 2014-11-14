@@ -3,7 +3,7 @@ __author__ = 'william'
 from elasticsearch import helpers, Elasticsearch
 from config import ES_NODES, RIOT_INDEX, GAME_DOCTYPE, USER_DOCTYPE
 from feature_extractor import FeatureExtractor
-from game import Game
+# from game import Game
 
 
 class UserCruncher(object):
