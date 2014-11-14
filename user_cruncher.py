@@ -1,5 +1,3 @@
-__author__ = 'william'
-
 from elasticsearch import helpers, Elasticsearch
 from config import ES_NODES, RIOT_INDEX, GAME_DOCTYPE, USER_DOCTYPE
 from feature_extractor import FeatureExtractor

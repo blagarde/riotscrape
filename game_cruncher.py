@@ -1,4 +1,4 @@
-__author__ = 'william'
+
 
 from elasticsearch import helpers, Elasticsearch
 from config import ES_NODES, RIOT_INDEX, RIOT_DOCTYPE

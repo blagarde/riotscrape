@@ -1,13 +1,16 @@
-__author__ = 'william'
-
 import abc
 
 
 class FeatureExtractor(object):
 
     def __init__(self, user, games):
-        self.games = [game for game in games if games["matchId"] not in user['game_id_list']]  # TODO : Don't forget to add games in user at the end
+        #TODO : Don't forget to add games in user at the end
+        self.games = [game for game in games if games["matchId"] not in user['game_id_list']]
         self.user = user
+
+    @abc.abstractmethod
+    def apply(self):
+        return
 
     @staticmethod
     def get_participant_id(game, user_id):
@@ -18,23 +21,31 @@ class FeatureExtractor(object):
         raise ValueError("user_id provided not found in game")
 
     @staticmethod
-    def get_participant(game,participant_id):
+    def get_participant(game, participant_id):
         for participant in game['participants']:
             if participant['participantId'] == participant_id:
                 return participant
         raise ValueError("participant_id not found in game")
 
+    @staticmethod
+    def get_team_id(game, participant_id):
+        participant = FeatureExtractor.get_participant(game, participant_id)
+        return participant["teamId"]
 
-    @abc.abstractmethod
-    def apply(self):
-        return
+    @staticmethod
+    def get_team(game, team_id):
+        for team in game['teams']:
+            if team["teamId"] == team_id:
+                return team
+        raise ValueError("teamId not found in game")
 
 
 class QueueTypeExtractor(FeatureExtractor):
 
     def apply(self):
         for game in self.games:
-            if game['queueType'] in ['RANKED_SOLO_5x5', 'RANKED_PREMADE_5x5', 'RANKED_PREMADE_3x3', 'RANKED_TEAM_3x3', 'RANKED_TEAM_5x5']:
+            if game['queueType'] in ['RANKED_SOLO_5x5', 'RANKED_PREMADE_5x5', 'RANKED_PREMADE_3x3',
+                                     'RANKED_TEAM_3x3', 'RANKED_TEAM_5x5']:
                 self.user['nRanked'] += 1
             self.user['nGame'] += 1
         return self.user
@@ -44,10 +55,12 @@ class GameModeExtractor(FeatureExtractor):
 
     def apply(self):
         for game in self.games:
-            if game['queueType'] in ['RANKED_SOLO_5x5', 'RANKED_PREMADE_5x5', 'RANKED_TEAM_5x5', 'NORMAL_5x5_DRAFT', 'NORMAL_5x5_BLIND']:
+            if game['queueType'] in ['RANKED_SOLO_5x5', 'RANKED_PREMADE_5x5', 'RANKED_TEAM_5x5',
+                                     'NORMAL_5x5_DRAFT', 'NORMAL_5x5_BLIND']:
                 self.user['nClassicGame'] += 1
-            else :
+            else:
                 self.user['nSubGame'] += 1
+
         return self.user
 
 
@@ -55,13 +68,41 @@ class ChampionExtractor(FeatureExtractor):
 
     def apply(self):
         for game in self.games:
-            participantId = self.get_participant_id(game,self.user["id"])
-            participant = self.get_participant(game,participantId)
+            participantId = self.get_participant_id(game, self.user["id"])
+            participant = self.get_participant(game, participantId)
             self.user['nChampi'][participant['championId']] += 1
         return self.user
 
 
+class ParticipantStatsExtractor(FeatureExtractor):
+    P_STATS = [('nKills', 'kills'), ('nDeaths', 'deaths'), ('nAssists', 'assists'),
+                ('nCreepsTeam', 'neutralMinionsKilledTeamJungle'), ('nCreepsEnemy', 'neutralMinionsKilledEnemyJungle'),
+                ('nMinions', 'minionsKilled'), ('nTowers', 'towerKills'),  ('nLevel', 'champLevel')]
 
+    def apply(self):
+        for game in self.games:
+            participantId = self.get_participant_id(game, self.user["id"])
+            participant = self.get_participant(game, participantId)
+            for pair in self.P_STATS:
+                self.user[pair[0]] += participant["stats"][pair[1]]
+        return self.user
+
+
+class TeamStatsExtractor(FeatureExtractor):
+    T_STATS = [('nDragons', 'dragonKills'), ('nBarons', 'baronKills'), ('nInhibitor', 'inhibitorKills')]
+
+    def apply(self):
+        for game in self.games:
+            team_id = self.get_team_id(game, self.user["id"])
+            team = self.get_team(game, team_id)
+            for pair in self.T_STATS:
+                self.user[pair[0]] += team[pair[1]]
+        return self.user
+
+
+class LaneExtractor(FeatureExtractor):
+    [('nBot', )('nTop', ), ('nMid', ), ('nJungle', ), ('nSupp', ), ('nAdc', )]
+    pass
 
 class FarmExtractor(FeatureExtractor):
     pass
@@ -82,9 +123,6 @@ class WardsExtractor(FeatureExtractor):
 class KDAExtractor(FeatureExtractor):
     pass
 
-
-class ChampionExtractor(FeatureExtractor):
-    pass
 
 
 class GameTypeExtractor(FeatureExtractor):
