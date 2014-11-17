@@ -1,8 +1,7 @@
 from elasticsearch import helpers, Elasticsearch
 from config import ES_NODES, RIOT_INDEX, GAME_DOCTYPE, USER_DOCTYPE
 from feature_extractor import FeatureExtractor
-# from game import Game
-
+from user import User
 
 class UserCruncher(object):
     ES = Elasticsearch(ES_NODES)
@@ -22,13 +21,13 @@ class UserCruncher(object):
         self.ES.index(RIOT_INDEX, doc_type=USER_DOCTYPE, body=user)
 
     def get_user(self,user_id):
-        return self.ES.get( index=RIOT_INDEX, doc_type=USER_DOCTYPE, id=user_id)
+        res = self.ES.get(index=RIOT_INDEX, doc_type=USER_DOCTYPE, id=user_id)
+        return User(res) 
 
     def process(self):
         for user_id in self.USERS_ID:
             user = self.get_user(user_id)
-            xgames = self.extract_games(user_id)
-            games = [Game(dct) for dct in xgames]
+            games = list(self.extract_games(user_id))
             for f in self.FE:
                 user = f.apply(user, games)
             self.insert_user(user)
