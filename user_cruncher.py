@@ -58,9 +58,9 @@ class UserCruncher(object):
         self.ES.index(RIOT_INDEX, doc_type=USER_DOCTYPE, body=user)
 
     def process(self):
-        for game_id, i in enumerate(self.GAMES_ID):
+        for i, game_id in enumerate(self.GAMES_ID):
             self._process_game(game_id)
-            out = "games crunched\t%s" % i
+            out = "\rgames crunched\t%s" % i
             sys.stdout.write(out)
         #self.insert_user(self.USERS)
 
