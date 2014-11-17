@@ -3,7 +3,8 @@ from config import ES_NODES, RIOT_INDEX, GAME_DOCTYPE, USER_DOCTYPE
 from feature_extractor import QueueTypeExtractor, GameModeExtractor, ChampionExtractor, ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor
 from user import User
 from elasticsearch.exceptions import NotFoundError
-
+from time import time
+import sys
 
 class UserCruncher(object):
     ES = Elasticsearch(ES_NODES)
@@ -57,29 +58,42 @@ class UserCruncher(object):
         self.ES.index(RIOT_INDEX, doc_type=USER_DOCTYPE, body=user)
 
     def process(self):
-        for game_id in self.GAMES_ID:
-            try:
-                game = self.get_game(game_id)
-            except NotFoundError:
-                self._log_not_found_games(game_id)
-                continue
-            for participant in game["_source"]["participantIdentities"]:
-                if "player" not in participant:
-                    continue
-                else:
-                    user_id = participant["player"]["summonerId"]
-                    try:
-                        user = self.USERS[user_id]
-                    except KeyError:
-                        user = User(user_id)
-                        self.USERS[user_id] = user
-                    for f in self.FE:
-                        user = f(user, game).apply()
-                    self.USERS[user_id] = user  # TODO: is it really necessary ?
-                    self._log_seen_users(user_id)
-            self._log_crunched_games(game_id)
+        for game_id, i in enumerate(self.GAMES_ID):
+            self._process_game(game_id)
+            out = "games crunched\t%s" % i
+            sys.stdout.write(out)
         #self.insert_user(self.USERS)
+
+    def _process_game(self, game_id):
+        try:
+            game = self.get_game(game_id)
+        except NotFoundError:
+            self._log_not_found_games(game_id)
+            return
+        for participant in game["_source"]["participantIdentities"]:
+            self._process_participant(participant, game)
+        self._log_crunched_games(game_id)
+
+    def _process_participant(self, participant, game):
+        if "player" not in participant:
+            return
+        else:
+            user_id = participant["player"]["summonerId"]
+            try:
+                user = self.USERS[user_id]
+            except KeyError:
+                user = User(user_id)
+                self.USERS[user_id] = user
+            if int(game['_id']) not in user['games_id_list']:
+                for f in self.FE:
+                    user = f(user, game).apply()
+                user["games_id_list"].append(int(game['_id']))  # TODO : speed up this dot ?
+                self.USERS[user_id] = user  # TODO: is it really necessary ?
+                self._log_seen_users(user_id)
 
 if __name__ == "__main__":
     uc = UserCruncher()
+    t_start = time()
     uc.process()
+    t_end = time()
+    print t_end-t_start
