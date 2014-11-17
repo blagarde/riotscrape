@@ -3,10 +3,10 @@ import abc
 
 class FeatureExtractor(object):
 
-    def __init__(self, user, games):
-        #TODO : Don't forget to add games in user at the end
-        self.games = [game for game in games if games["matchId"] not in user['game_id_list']]
+    def __init__(self, user, game):
+        # TODO: remove the init method and pass arguments in the apply method
         self.user = user
+        self.game = game
 
     @abc.abstractmethod
     def apply(self):
@@ -43,34 +43,30 @@ class FeatureExtractor(object):
 class QueueTypeExtractor(FeatureExtractor):
 
     def apply(self):
-        for game in self.games:
-            if game['queueType'] in ['RANKED_SOLO_5x5', 'RANKED_PREMADE_5x5', 'RANKED_PREMADE_3x3',
-                                     'RANKED_TEAM_3x3', 'RANKED_TEAM_5x5']:
-                self.user['nRanked'] += 1
-            self.user['nGame'] += 1
+        if self.game['queueType'] in ['RANKED_SOLO_5x5', 'RANKED_PREMADE_5x5', 'RANKED_PREMADE_3x3',
+                                 'RANKED_TEAM_3x3', 'RANKED_TEAM_5x5']:
+            self.user['nRanked'] += 1
+        self.user['nGame'] += 1
         return self.user
 
 
 class GameModeExtractor(FeatureExtractor):
 
     def apply(self):
-        for game in self.games:
-            if game['queueType'] in ['RANKED_SOLO_5x5', 'RANKED_PREMADE_5x5', 'RANKED_TEAM_5x5',
-                                     'NORMAL_5x5_DRAFT', 'NORMAL_5x5_BLIND']:
-                self.user['nClassicGame'] += 1
-            else:
-                self.user['nSubGame'] += 1
-
+        if self.game['queueType'] in ['RANKED_SOLO_5x5', 'RANKED_PREMADE_5x5', 'RANKED_TEAM_5x5',
+                                 'NORMAL_5x5_DRAFT', 'NORMAL_5x5_BLIND']:
+            self.user['nClassicGame'] += 1
+        else:
+            self.user['nSubGame'] += 1
         return self.user
 
 
 class ChampionExtractor(FeatureExtractor):
 
     def apply(self):
-        for game in self.games:
-            participant_id = self.get_participant_id(game, self.user["id"])
-            participant = self.get_participant(game, participant_id)
-            self.user['nChampi'][participant['championId']] += 1
+        participant_id = self.get_participant_id(self.game, self.user["id"])
+        participant = self.get_participant(self.game, participant_id)
+        self.user['nChampi'][participant['championId']] += 1
         return self.user
 
 
@@ -80,11 +76,10 @@ class ParticipantStatsExtractor(FeatureExtractor):
                ('nMinions', 'minionsKilled'), ('nTowers', 'towerKills'),  ('nLevel', 'champLevel')]
 
     def apply(self):
-        for game in self.games:
-            participant_id = self.get_participant_id(game, self.user["id"])
-            participant = self.get_participant(game, participant_id)
-            for pair in self.P_STATS:
-                self.user[pair[0]] += participant["stats"][pair[1]]
+        participant_id = self.get_participant_id(self.game, self.user["id"])
+        participant = self.get_participant(self.game, participant_id)
+        for pair in self.P_STATS:
+            self.user[pair[0]] += participant["stats"][pair[1]]
         return self.user
 
 
@@ -92,11 +87,10 @@ class TeamStatsExtractor(FeatureExtractor):
     T_STATS = [('nDragons', 'dragonKills'), ('nBarons', 'baronKills'), ('nInhibitor', 'inhibitorKills')]
 
     def apply(self):
-        for game in self.games:
-            team_id = self.get_team_id(game, self.user["id"])
-            team = self.get_team(game, team_id)
-            for pair in self.T_STATS:
-                self.user[pair[0]] += team[pair[1]]
+        team_id = self.get_team_id(self.game, self.user["id"])
+        team = self.get_team(self.game, team_id)
+        for pair in self.T_STATS:
+            self.user[pair[0]] += team[pair[1]]
         return self.user
 
 
@@ -104,11 +98,10 @@ class LaneExtractor(FeatureExtractor):
     LANE_CONV = {'MIDDLE': 'nMid', 'TOP': 'nTop', 'BOTTOM': 'nBot', 'JUNGLE': 'nJungle'}
 
     def apply(self):
-        for game in self.games:
-            participant_id = self.get_participant_id(game, self.user["id"])
-            participant = self.get_participant(game, participant_id)
-            lane = participant['timeline']['lane']
-            self.user[self.LANE_CONV[lane]] += 1
+        participant_id = self.get_participant_id(self.game, self.user["id"])
+        participant = self.get_participant(self.game, participant_id)
+        lane = participant['timeline']['lane']
+        self.user[self.LANE_CONV[lane]] += 1
         return self.user
 
 

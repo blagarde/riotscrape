@@ -1,25 +1,41 @@
 from elasticsearch import helpers, Elasticsearch
 from config import ES_NODES, RIOT_INDEX, GAME_DOCTYPE, USER_DOCTYPE
-from feature_extractor import FeatureExtractor
+from feature_extractor import QueueTypeExtractor, GameModeExtractor, ChampionExtractor, ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor
 from user import User
-from collections import defaultdict
+from elasticsearch.exceptions import NotFoundError
 
 
 class UserCruncher(object):
     ES = Elasticsearch(ES_NODES)
-    FE = [FeatureExtractor]
+    FE = [QueueTypeExtractor, GameModeExtractor, ChampionExtractor,
+          ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor]
     USERS_ID = set()
     GAMES_ID = set()
-    USERS = defaultdict(User)
-    with open('user_games.txt', 'r') as fh:
+    USERS = {}
+    with open('users.txt', 'r') as fh:
         for line in fh:
             USERS_ID.add(int(line))
     with open('games.txt', 'r') as f:
         for line in f:
             GAMES_ID.add(int(line))
 
+    @classmethod
+    def _log_crunched_games(cls, game_id):
+        with open('crunched_games.txt', 'a') as gf:
+            gf.write('%s\n' % game_id)
+
+    @classmethod
+    def _log_seen_users(cls, user_id):
+        with open('seen_users.txt', 'a') as uf:
+            uf.write('%s\n' % user_id)
+
+    @classmethod
+    def _log_not_found_games(cls, game_id):
+        with open('not_found_games.txt', 'a') as uf:
+            uf.write('%s\n' % game_id)
+
     def extract_games(self, user_id):
-        #TODO: this method is no longer useful
+        # TODO: this method is no longer useful
         scan = helpers.scan(client=self.ES, query=self.write_query(user_id),
                             scroll="5m", index=RIOT_INDEX, doc_type=GAME_DOCTYPE)
         for game in scan:
@@ -37,15 +53,33 @@ class UserCruncher(object):
         return User(res)
 
     def insert_user(self, user):
+        # TODO: use a bulk update instead
         self.ES.index(RIOT_INDEX, doc_type=USER_DOCTYPE, body=user)
 
     def process(self):
         for game_id in self.GAMES_ID:
-            game = self.get_game(game_id)
+            try:
+                game = self.get_game(game_id)
+            except NotFoundError:
+                self._log_not_found_games(game_id)
+                continue
             for participant in game["_source"]["participantIdentities"]:
-                if "summonerId" not in participant:
+                if "player" not in participant:
                     continue
-                user_id = participant["summonerId"]
-                for f in self.FE:
-                    self.USERS[user_id] = f.apply(self.USERS[user_id], game
-            #TODO: write 
+                else:
+                    user_id = participant["player"]["summonerId"]
+                    try:
+                        user = self.USERS[user_id]
+                    except KeyError:
+                        user = User(user_id)
+                        self.USERS[user_id] = user
+                    for f in self.FE:
+                        user = f(user, game).apply()
+                    self.USERS[user_id] = user  # TODO: is it really necessary ?
+                    self._log_seen_users(user_id)
+            self._log_crunched_games(game_id)
+        #self.insert_user(self.USERS)
+
+if __name__ == "__main__":
+    uc = UserCruncher()
+    uc.process()
