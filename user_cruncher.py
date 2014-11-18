@@ -1,8 +1,7 @@
-from elasticsearch import helpers, Elasticsearch
+from elasticsearch import Elasticsearch, helpers
 from config import ES_NODES, RIOT_INDEX, GAME_DOCTYPE, USER_DOCTYPE
 from feature_extractor import QueueTypeExtractor, GameModeExtractor, ChampionExtractor, ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor
 from user import User
-from elasticsearch.exceptions import NotFoundError
 from time import time
 import sys
 
@@ -52,22 +51,35 @@ class UserCruncher(object):
         res = self.ES.get(index=RIOT_INDEX, doc_type=USER_DOCTYPE, id=user_id)
         return User(res)
 
-    def insert_user(self, user):
-        # TODO: use a bulk update instead
-        self.ES.index(RIOT_INDEX, doc_type=USER_DOCTYPE, body=user)
+    def insert_users(self, chunk_size=2000):
+        users = [user for di, user in self.USERS.items()]
+        return helpers.bulk(client=self.ES, actions=self._build_bulk_request(users), chunk_size=chunk_size)
+
+    def _build_bulk_request(self, users):
+        for user in users:
+            query = {
+                    "_op_type": "index",
+                    "_id": user['id'],
+                    "_index": 'rita',
+                    "_type": 'user',
+                    "_source": user}
+            yield query
 
     def process(self, chunk_size=1000):
         chunks = [list(self.GAMES_ID)[x:x+chunk_size] for x in xrange(0, len(self.GAMES_ID), chunk_size)]
         for i, chunk in enumerate(chunks):
-            # TODO : check it works
             t_start = time()
             games = self.get_games(chunk)
             for game in games:
                 self._process_game(game)
-            # TODO: self.insert_user(self.USERS)
             t_end = time()
             out = "\rgames crunched\t%s\tchunk time\t%s" % ((i+1)*chunk_size, t_end-t_start)
             sys.stdout.write(out)
+            if i > 2:
+                break
+        self.insert_users()
+
+
 
     def _process_game(self, game):
         if not game['found']:
@@ -92,8 +104,8 @@ class UserCruncher(object):
             if int(game['_id']) not in user['games_id_list']:
                 for f in self.FE:
                     user = f(user, game).apply()
-                user["games_id_list"].append(int(game['_id']))  # TODO : speed up this dot ?
-                self.USERS[user_id] = user  # TODO: is it really necessary ?
+                user["games_id_list"].append(int(game['_id']))
+                self.USERS[user_id] = user
                 self._log_seen_users(user_id)
 
 if __name__ == "__main__":

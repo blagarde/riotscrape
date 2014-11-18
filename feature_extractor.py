@@ -4,7 +4,6 @@ import abc
 class FeatureExtractor(object):
 
     def __init__(self, user, game):
-        # TODO: remove the init method and pass arguments in the apply method
         self.user = user
         self.aggregate = self.user["aggregate"]
         self.game = game['_source']
@@ -74,7 +73,8 @@ class ChampionExtractor(FeatureExtractor):
 class ParticipantStatsExtractor(FeatureExtractor):
     P_STATS = [('nKills', 'kills'), ('nDeaths', 'deaths'), ('nAssists', 'assists'),
                ('nCreepsTeam', 'neutralMinionsKilledTeamJungle'), ('nCreepsEnemy', 'neutralMinionsKilledEnemyJungle'),
-               ('nMinions', 'minionsKilled'), ('nTowers', 'towerKills'),  ('nLevel', 'champLevel')]
+               ('nMinions', 'minionsKilled'), ('nTowers', 'towerKills'),  ('nLevel', 'champLevel'),
+               ('nWardsKilled', 'wardsKilled'), ('nWards', 'wardsPlaced')]
 
     def apply(self):
         participant_id = self.get_participant_id(self.game, self.user["id"])
@@ -85,7 +85,8 @@ class ParticipantStatsExtractor(FeatureExtractor):
 
 
 class TeamStatsExtractor(FeatureExtractor):
-    T_STATS = [('nDragons', 'dragonKills'), ('nBarons', 'baronKills'), ('nInhibitor', 'inhibitorKills')]
+    T_STATS = [('nDragons', 'dragonKills'), ('nBarons', 'baronKills'),
+               ('nInhibitor', 'inhibitorKills'), ('nVictory', 'winner')]
 
     def apply(self):
         participant_id = self.get_participant_id(self.game, self.user["id"])
@@ -105,24 +106,3 @@ class LaneExtractor(FeatureExtractor):
         lane = participant['timeline']['lane']
         self.aggregate[self.LANE_CONV[lane]] += 1
         return self.user
-
-
-class RoleExtractor(FeatureExtractor):
-    pass
-
-
-class WardsExtractor(FeatureExtractor):
-    pass
-
-
-class KDAExtractor(FeatureExtractor):
-    pass
-
-
-
-class GameTypeExtractor(FeatureExtractor):
-    pass
-
-
-class SocialExtractor(FeatureExtractor):
-    pass
