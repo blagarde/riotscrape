@@ -6,6 +6,7 @@ from elasticsearch.exceptions import NotFoundError
 from time import time
 import sys
 
+
 class UserCruncher(object):
     ES = Elasticsearch(ES_NODES)
     FE = [QueueTypeExtractor, GameModeExtractor, ChampionExtractor,
@@ -35,12 +36,10 @@ class UserCruncher(object):
         with open('not_found_games.txt', 'a') as uf:
             uf.write('%s\n' % game_id)
 
-    def extract_games(self, user_id):
-        # TODO: this method is no longer useful
-        scan = helpers.scan(client=self.ES, query=self.write_query(user_id),
-                            scroll="5m", index=RIOT_INDEX, doc_type=GAME_DOCTYPE)
-        for game in scan:
-            yield game['_source']
+    def get_games(self, games_id):
+        body = {'ids': games_id}
+        games = self.ES.mget(index=RIOT_INDEX, doc_type=GAME_DOCTYPE, body=body)
+        return [game for game in games["docs"]]
 
     @staticmethod
     def write_query(user_id):
@@ -57,28 +56,34 @@ class UserCruncher(object):
         # TODO: use a bulk update instead
         self.ES.index(RIOT_INDEX, doc_type=USER_DOCTYPE, body=user)
 
-    def process(self):
-        for i, game_id in enumerate(self.GAMES_ID):
-            self._process_game(game_id)
-            out = "\rgames crunched\t%s" % i
+    def process(self, chunk_size=1000):
+        chunks = [list(self.GAMES_ID)[x:x+chunk_size] for x in xrange(0, len(self.GAMES_ID), chunk_size)]
+        for i, chunk in enumerate(chunks):
+            # TODO : check it works
+            t_start = time()
+            games = self.get_games(chunk)
+            for game in games:
+                self._process_game(game)
+            # TODO: self.insert_user(self.USERS)
+            t_end = time()
+            out = "\rgames crunched\t%s\tchunk time\t%s" % ((i+1)*chunk_size, t_end-t_start)
             sys.stdout.write(out)
-        #self.insert_user(self.USERS)
 
-    def _process_game(self, game_id):
-        try:
-            game = self.get_game(game_id)
-        except NotFoundError:
-            self._log_not_found_games(game_id)
+    def _process_game(self, game):
+        if not game['found']:
+            self._log_not_found_games(game['_id'])
             return
         for participant in game["_source"]["participantIdentities"]:
             self._process_participant(participant, game)
-        self._log_crunched_games(game_id)
+        self._log_crunched_games(int(game["_id"]))
 
     def _process_participant(self, participant, game):
         if "player" not in participant:
             return
         else:
             user_id = participant["player"]["summonerId"]
+            if user_id not in self.USERS_ID:
+                return
             try:
                 user = self.USERS[user_id]
             except KeyError:
@@ -93,7 +98,5 @@ class UserCruncher(object):
 
 if __name__ == "__main__":
     uc = UserCruncher()
-    t_start = time()
     uc.process()
-    t_end = time()
-    print t_end-t_start
+
