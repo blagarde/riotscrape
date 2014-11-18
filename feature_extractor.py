@@ -40,7 +40,6 @@ class FeatureExtractor(object):
         raise ValueError("teamId not found in game")
 
     def is_classic_game(self):
-        # TODO: see with UB
         return self.game['queueType'] in ['RANKED_SOLO_5x5', 'RANKED_PREMADE_5x5', 'RANKED_TEAM_5x5',
                                           'NORMAL_5x5_DRAFT', 'NORMAL_5x5_BLIND']
 
@@ -80,9 +79,8 @@ class ParticipantStatsExtractor(FeatureExtractor):
                ('nMinions', 'minionsKilled'), ('nTowers', 'towerKills'),  ('nLevel', 'champLevel'),
                ('nWardsKilled', 'wardsKilled'), ('nWards', 'wardsPlaced')]
 
+    @classic_game_only
     def apply(self):
-        if not self.is_classic_game():
-            return self.user
         participant_id = self.get_participant_id(self.game, self.user["id"])
         participant = self.get_participant(self.game, participant_id)
         for pair in self.P_STATS:
@@ -94,9 +92,8 @@ class TeamStatsExtractor(FeatureExtractor):
     T_STATS = [('nDragons', 'dragonKills'), ('nBarons', 'baronKills'),
                ('nInhibitor', 'inhibitorKills'), ('nVictory', 'winner')]
 
+    @classic_game_only
     def apply(self):
-        if not self.is_classic_game():
-            return self.user
         participant_id = self.get_participant_id(self.game, self.user["id"])
         team_id = self.get_team_id(self.game, participant_id)
         team = self.get_team(self.game, team_id)
@@ -108,11 +105,19 @@ class TeamStatsExtractor(FeatureExtractor):
 class LaneExtractor(FeatureExtractor):
     LANE_CONV = {'MIDDLE': 'nMid', 'TOP': 'nTop', 'BOTTOM': 'nBot', 'JUNGLE': 'nJungle'}
 
+    @classic_game_only
     def apply(self):
-        if not self.is_classic_game():
-            return self.user
         participant_id = self.get_participant_id(self.game, self.user["id"])
         participant = self.get_participant(self.game, participant_id)
         lane = participant['timeline']['lane']
         self.aggregate[self.LANE_CONV[lane]] += 1
         return self.user
+
+
+def classic_game_only(method):
+    def decorated(self):
+        if self.is_classic_game:
+            return method(self)
+        else:
+            return self.user
+    return decorated
