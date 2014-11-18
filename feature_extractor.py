@@ -39,6 +39,11 @@ class FeatureExtractor(object):
                 return team
         raise ValueError("teamId not found in game")
 
+    def is_classic_game(self):
+        # TODO: see with UB
+        return self.game['queueType'] in ['RANKED_SOLO_5x5', 'RANKED_PREMADE_5x5', 'RANKED_TEAM_5x5',
+                                          'NORMAL_5x5_DRAFT', 'NORMAL_5x5_BLIND']
+
 
 class QueueTypeExtractor(FeatureExtractor):
 
@@ -53,8 +58,7 @@ class QueueTypeExtractor(FeatureExtractor):
 class GameModeExtractor(FeatureExtractor):
 
     def apply(self):
-        if self.game['queueType'] in ['RANKED_SOLO_5x5', 'RANKED_PREMADE_5x5', 'RANKED_TEAM_5x5',
-                                      'NORMAL_5x5_DRAFT', 'NORMAL_5x5_BLIND']:
+        if self.is_classic_game():
             self.aggregate['nClassicGame'] += 1
         else:
             self.aggregate['nSubGame'] += 1
@@ -77,6 +81,8 @@ class ParticipantStatsExtractor(FeatureExtractor):
                ('nWardsKilled', 'wardsKilled'), ('nWards', 'wardsPlaced')]
 
     def apply(self):
+        if not self.is_classic_game():
+            return self.user
         participant_id = self.get_participant_id(self.game, self.user["id"])
         participant = self.get_participant(self.game, participant_id)
         for pair in self.P_STATS:
@@ -89,6 +95,8 @@ class TeamStatsExtractor(FeatureExtractor):
                ('nInhibitor', 'inhibitorKills'), ('nVictory', 'winner')]
 
     def apply(self):
+        if not self.is_classic_game():
+            return self.user
         participant_id = self.get_participant_id(self.game, self.user["id"])
         team_id = self.get_team_id(self.game, participant_id)
         team = self.get_team(self.game, team_id)
@@ -101,6 +109,8 @@ class LaneExtractor(FeatureExtractor):
     LANE_CONV = {'MIDDLE': 'nMid', 'TOP': 'nTop', 'BOTTOM': 'nBot', 'JUNGLE': 'nJungle'}
 
     def apply(self):
+        if not self.is_classic_game():
+            return self.user
         participant_id = self.get_participant_id(self.game, self.user["id"])
         participant = self.get_participant(self.game, participant_id)
         lane = participant['timeline']['lane']

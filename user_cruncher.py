@@ -111,4 +111,3 @@ class UserCruncher(object):
 if __name__ == "__main__":
     uc = UserCruncher()
     uc.process()
-
