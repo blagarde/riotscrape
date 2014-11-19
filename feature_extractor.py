@@ -1,12 +1,23 @@
 import abc
 
 
+def classic_game_only(method):
+    def decorated(self):
+        if self.is_classic_game:
+            return method(self)
+        else:
+            return self.user
+    return decorated
+
+
 class FeatureExtractor(object):
 
     def __init__(self, user, game):
         self.user = user
         self.aggregate = self.user["aggregate"]
         self.game = game['_source']
+        if self.is_classic_game():
+            pass
 
     @abc.abstractmethod
     def apply(self):
@@ -112,12 +123,3 @@ class LaneExtractor(FeatureExtractor):
         lane = participant['timeline']['lane']
         self.aggregate[self.LANE_CONV[lane]] += 1
         return self.user
-
-
-def classic_game_only(method):
-    def decorated(self):
-        if self.is_classic_game:
-            return method(self)
-        else:
-            return self.user
-    return decorated

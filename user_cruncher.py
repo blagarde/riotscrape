@@ -75,11 +75,8 @@ class UserCruncher(object):
             t_end = time()
             out = "\rgames crunched\t%s\tchunk time\t%s" % ((i+1)*chunk_size, t_end-t_start)
             sys.stdout.write(out)
-            if i > 2:
-                break
+            sys.stdout.flush()
         self.insert_users()
-
-
 
     def _process_game(self, game):
         if not game['found']:
