@@ -136,9 +136,9 @@ class Scraper(object):
         if os.path.exists(GAMES_FILE):
             Tasks.games |= set([l.rstrip() for l in open(GAMES_FILE) if l.strip() != ''])
         if os.path.exists(USERS_FILE):
-            games = [l.rstrip() for l in open(USERS_FILE) if l.strip() != '']
-            random.shuffle(games)
-            Tasks.users += games
+            users = [l.rstrip() for l in open(USERS_FILE) if l.strip() != '']
+            random.shuffle(users)
+            Tasks.users += users
             Tasks.user_set |= set(Tasks.users)
         print("**START**\n")
         self.display()
