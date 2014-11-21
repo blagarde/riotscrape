@@ -21,7 +21,7 @@ class ProbaExtractor(FeatureExtractor):
                  "pTop":            {"min":0, "max":1, "name":"nTop", "ref":"nClassicGame"},
                  "pMid":            {"min":0, "max":1, "name":"nMid", "ref":"nClassicGame"},
                  "pJungle":         {"min":0, "max":1, "name":"nJungle", "ref":"nClassicGame"},
-                 "pTowers":         {"min":0, "max":11, "name":"nTowers", "ref":"nClassicGame"},
+                 "pTowers":         {"min":0, "max":4, "name":"nTowers", "ref":"nClassicGame"},
                  "pDragons":        {"min":0, "max":7, "name":"nDragons", "ref":"nClassicGame"},
                  "pNashors":        {"min":0, "max":3, "name":"nNashors", "ref":"nClassicGame"},
                  "pInhibitors":     {"min":0, "max":7, "name":"nInhibitors", "ref":"nClassicGame"},

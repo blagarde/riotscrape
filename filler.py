@@ -12,12 +12,12 @@ with open("games.txt", "r") as f:
         #games.append(gameid[:-1])
         file_.write("LPUSH games "+str(gameid[:-1])+"\n")
 
-
-with open("users.txt", "r") as f:
-    for userid in f.readlines():
-        #users.append(userid[:-1])
-        file_.write("LPUSH users "+str(userid[:-1])+"\n")
-        file_.write("SADD users_set "+str(userid[:-1])+"\n")
+# 
+# with open("users.txt", "r") as f:
+#     for userid in f.readlines():
+#         #users.append(userid[:-1])
+#         file_.write("LPUSH users "+str(userid[:-1])+"\n")
+#         file_.write("SADD users_set "+str(userid[:-1])+"\n")
 
 file_.close()
 #  
