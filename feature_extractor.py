@@ -1,125 +1,115 @@
-import abc
+from aggregate_extractor import Extractor
+from math import log
+from math import exp
 
 
-def classic_game_only(method):
-    def decorated(self):
-        if self.is_classic_game:
-            return method(self)
-        else:
-            return self.user
-    return decorated
+class FeatureExtractor(Extractor):
 
-
-class FeatureExtractor(object):
-
-    def __init__(self, user, game):
+    def __init__(self, user):
         self.user = user
-        self.aggregate = self.user["aggregate"]
-        self.game = game['_source']
-        if self.is_classic_game():
-            pass
 
-    @abc.abstractmethod
+class ProbaExtractor(FeatureExtractor):
+    probas =   {
+                 "pMinions":        {"min":0, "max":250, "name":"nMinions", "ref":"nClassicGame"},
+                 "pCreepsTeam":     {"min":0, "max":150, "name":"nCreepsTeam", "ref":"nClassicGame"},
+                 "pCreepsEnemy":    {"min":0, "max":100, "name":"nCreepsEnemy", "ref":"nClassicGame"},
+                 "pLevel":          {"min":7, "max":18, "name":"nLevel", "ref":"nClassicGame"},
+                 "pKills":          {"min":0, "max":15, "name":"nKills", "ref":"nClassicGame"},
+                 "pDeaths":         {"min":0, "max":15, "name":"nDeaths", "ref":"nClassicGame"},
+                 "pAssists":        {"min":0, "max":20, "name":"nAssists", "ref":"nClassicGame"},
+                 "pBot":            {"min":0, "max":1, "name":"nBot", "ref":"nClassicGame"},
+                 "pTop":            {"min":0, "max":1, "name":"nTop", "ref":"nClassicGame"},
+                 "pMid":            {"min":0, "max":1, "name":"nMid", "ref":"nClassicGame"},
+                 "pJungle":         {"min":0, "max":1, "name":"nJungle", "ref":"nClassicGame"},
+                 "pTowers":         {"min":0, "max":4, "name":"nTowers", "ref":"nClassicGame"},
+                 "pDragons":        {"min":0, "max":7, "name":"nDragons", "ref":"nClassicGame"},
+                 "pNashors":        {"min":0, "max":3, "name":"nNashors", "ref":"nClassicGame"},
+                 "pInhibitors":     {"min":0, "max":7, "name":"nInhibitors", "ref":"nClassicGame"},
+                 "pWards":          {"min":0, "max":13, "name":"nWards", "ref":"nClassicGame"},
+                 "pWardsKilled":    {"min":0, "max":6, "name":"nWardsKilled", "ref":"nClassicGame"},
+                 "pWin":            {"min":0, "max":1, "name": "nWin", "ref":"nClassicGame"},
+                 "pClassicGame":    {"min":0, "max":1, "name": "nClassicGame", "ref":"nGame"},
+                 "pRanked":         {"min":0, "max":1, "name": "nRanked", "ref":"nGame"},
+                 "pSubGame":        {"min":0, "max":1, "name": "nSubGame", "ref":"nGame"},
+                }
+    
     def apply(self):
-        return
+        user = self.user
+        for k,v in self.probas.items():
+            if v["ref"] not in user["aggregate"]:
+                user["aggregate"][v["ref"]] = 0
+            if v["name"] not in user["aggregate"]:
+                user["aggregate"][v["name"]] = 0
+            if user["aggregate"][v["ref"]] != 0:
+                user["feature"][k] = (max(v["min"], min(v["max"],float(user["aggregate"][v["name"]]) / user["aggregate"][v["ref"]])) - v["min"]) / (v["max"] - v["min"])
+            else:
+                user["feature"][k] = 0
+        return user
 
-    @staticmethod
-    def get_participant_id(game, user_id):
-        participants = game['participantIdentities']
-        for participant in participants:
-            if participant["player"]["summonerId"] == user_id:
-                return participant['participantId']
-        raise ValueError("user_id provided not found in game")
+class RulesExtractor(FeatureExtractor):
 
-    @staticmethod
-    def get_participant(game, participant_id):
-        for participant in game['participants']:
-            if participant['participantId'] == participant_id:
-                return participant
-        raise ValueError("participant_id not found in game")
+    def __init__(self, user):
+        FeatureExtractor.__init__(self, user)
+        self.categories = { "solo": { "pMinions": 3,
+                            "pCreepsTeam": 1,
+                            "pTop": 3,
+                            "pMid": 2,
+                            "pLevel": 2,
+                            "pKills": 1,
+                            "pDeaths": -2,
+                            "pAssists": -1,
+                            "pBot": -3 },
+                  "action": { "pKills": 2,
+                             "pDeaths": 2,
+                             "pAssists": 2,
+                             "pMid": 1,
+                             "pJungle": 1,
+                             "pFirstBlood": 3,
+                             "pDuration": -2,
+                             "pTop": -2,
+                             "pBot": -2,
+                             "pCreepEnemy": 2 },
+                  "teamplay": { "pBot": 2,
+                               "pJungle": 2,
+                               "pDragons": 2,
+                               "pNashors": 2,
+                               "pTop": -2,
+                               "pMinions": -1,
+                               "pLevel": -1,
+                               "pWards": 2 },
+                  "strategy": { "pTowers": 1,
+                               "pDragons": 3,
+                               "pNashors": 3,
+                               "pInhibitors": 2,
+                               "pWards": 3,
+                               "pWardsKilled": 2 },
+                  "loyalty": self._loyalty,
+                  "competition": { "pRanked": 1 },
+                  "diversity": { "pSubGame": 1 }
+                  }
 
-    @staticmethod
-    def get_team_id(game, participant_id):
-        participant = FeatureExtractor.get_participant(game, participant_id)
-        return participant["teamId"]
-
-    @staticmethod
-    def get_team(game, team_id):
-        for team in game['teams']:
-            if team["teamId"] == team_id:
-                return team
-        raise ValueError("teamId not found in game")
-
-    def is_classic_game(self):
-        return self.game['queueType'] in ['RANKED_SOLO_5x5', 'RANKED_PREMADE_5x5', 'RANKED_TEAM_5x5',
-                                          'NORMAL_5x5_DRAFT', 'NORMAL_5x5_BLIND']
-
-
-class QueueTypeExtractor(FeatureExtractor):
+    def _loyalty(self, user):
+        f = lambda x: x * log(x) if x != 0 else 0
+        l = [float(champ_count)/user["aggregate"]["nGame"] for _, champ_count in user["aggregate"]["nChamp"].items()]
+        s = sum(map(f, l))
+        return exp(s)
 
     def apply(self):
-        if self.game['queueType'] in ['RANKED_SOLO_5x5', 'RANKED_PREMADE_5x5', 'RANKED_PREMADE_3x3',
-                                      'RANKED_TEAM_3x3', 'RANKED_TEAM_5x5']:
-            self.aggregate['nRanked'] += 1
-        self.aggregate['nGame'] += 1
-        return self.user
-
-
-class GameModeExtractor(FeatureExtractor):
-
-    def apply(self):
-        if self.is_classic_game():
-            self.aggregate['nClassicGame'] += 1
-        else:
-            self.aggregate['nSubGame'] += 1
-        return self.user
-
-
-class ChampionExtractor(FeatureExtractor):
-
-    def apply(self):
-        participant_id = self.get_participant_id(self.game, self.user["id"])
-        participant = self.get_participant(self.game, participant_id)
-        self.aggregate['nChampi'][participant['championId']] += 1
-        return self.user
-
-
-class ParticipantStatsExtractor(FeatureExtractor):
-    P_STATS = [('nKills', 'kills'), ('nDeaths', 'deaths'), ('nAssists', 'assists'),
-               ('nCreepsTeam', 'neutralMinionsKilledTeamJungle'), ('nCreepsEnemy', 'neutralMinionsKilledEnemyJungle'),
-               ('nMinions', 'minionsKilled'), ('nTowers', 'towerKills'),  ('nLevel', 'champLevel'),
-               ('nWardsKilled', 'wardsKilled'), ('nWards', 'wardsPlaced')]
-
-    @classic_game_only
-    def apply(self):
-        participant_id = self.get_participant_id(self.game, self.user["id"])
-        participant = self.get_participant(self.game, participant_id)
-        for pair in self.P_STATS:
-            self.aggregate[pair[0]] += participant["stats"][pair[1]]
-        return self.user
-
-
-class TeamStatsExtractor(FeatureExtractor):
-    T_STATS = [('nDragons', 'dragonKills'), ('nBarons', 'baronKills'),
-               ('nInhibitor', 'inhibitorKills'), ('nVictory', 'winner')]
-
-    @classic_game_only
-    def apply(self):
-        participant_id = self.get_participant_id(self.game, self.user["id"])
-        team_id = self.get_team_id(self.game, participant_id)
-        team = self.get_team(self.game, team_id)
-        for pair in self.T_STATS:
-            self.aggregate[pair[0]] += team[pair[1]]
-        return self.user
-
-
-class LaneExtractor(FeatureExtractor):
-    LANE_CONV = {'MIDDLE': 'nMid', 'TOP': 'nTop', 'BOTTOM': 'nBot', 'JUNGLE': 'nJungle'}
-
-    @classic_game_only
-    def apply(self):
-        participant_id = self.get_participant_id(self.game, self.user["id"])
-        participant = self.get_participant(self.game, participant_id)
-        lane = participant['timeline']['lane']
-        self.aggregate[self.LANE_CONV[lane]] += 1
-        return self.user
+        user = self.user
+        for k,v in self.categories.items():
+            if type(v) != dict:
+                user["feature"][k] = v(user)
+            else:
+                coeffSum = 0
+                res = 0
+                for key,val in v.items():
+                    if key not in user["feature"]:
+                        user["feature"][key] = 0
+                    if val < 0:
+                        res += -val * (1-user["feature"][key])
+                        coeffSum += -val
+                    else:
+                        res += val * user["feature"][key]
+                        coeffSum += val 
+                user["feature"][k] = res / coeffSum
+        return user
