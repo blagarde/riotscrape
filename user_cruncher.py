@@ -7,6 +7,7 @@ import sys
 
 
 class UserCruncher(object):
+    # TODO: put in init method
     ES = Elasticsearch(ES_NODES)
     FE = [QueueTypeExtractor, GameModeExtractor, ChampionExtractor,
           ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor]
