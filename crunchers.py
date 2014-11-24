@@ -1,5 +1,5 @@
 from multiprocessing import Pool
-from aggregate_extractor import ChampionExtractor, GameModeExtractor, QueueTypeExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor
+from aggregate_extractor import ChampionExtractor, GameModeExtractor,QueueTypeExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor
 from elasticsearch.client import Elasticsearch
 from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, RIOT_INDEX, NB_PROCESSES
 from redis import StrictRedis as Buffer
@@ -10,6 +10,7 @@ from abc import abstractmethod
 from time import time
 import sys
 import json
+
 
 class Cruncher(object):
 
@@ -65,14 +66,16 @@ class Cruncher(object):
     def _build_bulk_request(self, users):
         pass
 
+
 class GameCruncher(Cruncher):
     
     def __init__(self):
         Cruncher.__init__(self)
-        self.AE = [QueueTypeExtractor, GameModeExtractor, ChampionExtractor, ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor]
+        self.AE = [QueueTypeExtractor, GameModeExtractor, ChampionExtractor,
+                   ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor]
 
     def _init_ids(self):
-        self.content = self.buffer.pipeline().lrange('games',0,1000).ltrim('games', 1000, -1).execute()[0]
+        self.content = self.buffer.pipeline().lrange('games', 0, 1000).ltrim('games', 1000, -1).execute()[0]
         self.USERS_ID = set(self.buffer.smembers('users_set'))
 
     def _get_content(self, games_id):
@@ -105,25 +108,48 @@ class GameCruncher(Cruncher):
                 self.USERS[user_id] = user
 
     def _build_bulk_request(self, users):
+        """
+
+        :param users:
+        :return: a generator which yields queries
+        """
+        for user in users:
+            query = {
+                "_op_type": "update",
+                "_id": user['id'],
+                "_index": 'ritou',
+                "_type": 'user',
+                "script": "update_agg_data",
+                "params": {"data": json.dumps(user)},
+                "lang": "python"
+                }
+            yield query
+
+    def _build_bulk_request_mvel(self, users):
+        """
+
+        :param users:
+        :return:
+        """
         for user in users:
             update = []
             update.append("ctx._source.games_id_list += "+str(user["games_id_list"]))
-            for k,v in user["aggregate"].items():
+            for k, v in user["aggregate"].items():
                 if isinstance(v, dict):
                     for k2,v2 in v.items():
                         update.append("ctx._source.aggregate."+str(k)+"."+str(k2)+" += "+str(v2))
                 else:
                     update.append("ctx._source.aggregate."+str(k)+" += "+str(v))
             query = {
-                    "_op_type": "update",
-                    "_id": user['id'],
-                    "_index": 'ritou',
-                    "_type": 'user',
-                    "params": {},
-                    "script": "\n".join(update),
-                    "upsert": user
-                    }
+                "_op_type": "update",
+                "_id": user['id'],
+                "_index": 'ritou',
+                "_type": 'user',
+                "params": {},
+                "script": "\n".join(update),
+                "upsert": user}
             yield query
+
 
 class UserCruncher(Cruncher):
     
@@ -143,7 +169,7 @@ class UserCruncher(Cruncher):
         return res
 
     def _process_content(self, user):
-        if user["found"] == True:
+        if user["found"]:
             user = user["_source"]
             try:
                 for f in self.FE:
@@ -156,20 +182,22 @@ class UserCruncher(Cruncher):
     def _build_bulk_request(self, users):
         for user in users:
             query = {
-                    "_op_type": "update",
-                    "_id": user['id'],
-                    "_index": 'ritou',
-                    "_type": 'user',
-                    "params": {"feat":user["feature"]},
-                    "script": "ctx._source.feature = feat",
-                    "upsert": user
-                    }
+                "_op_type": "update",
+                "_id": user['id'],
+                "_index": 'ritou',
+                "_type": 'user',
+                "params": {"feat": user["feature"]},
+                "script": "ctx._source.feature = feat",
+                "upsert": user
+            }
             yield query
+
 
 def launch_cruncher(cruncher):
     cr = cruncher()
     cr.crunch()
 
-pool = Pool(processes=NB_PROCESSES)
-#pool.map(launch_cruncher, [GameCruncher for _ in range(NB_PROCESSES*100)])
-pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES*1000)])
+if __name__ == '__main__':
+    pool = Pool(processes=NB_PROCESSES)
+    pool.map(launch_cruncher, [GameCruncher for _ in range(NB_PROCESSES*100)])
+    #pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES*100)])
