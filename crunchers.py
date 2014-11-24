@@ -10,7 +10,7 @@ from abc import abstractmethod
 from time import time
 import sys
 import json
-
+import os
 
 class Cruncher(object):
 
@@ -60,7 +60,8 @@ class Cruncher(object):
 
     def insert_users(self, chunk_size=2000):
         users = [user for _, user in self.USERS.items()]
-        return helpers.bulk(client=self.ES, actions=self._build_bulk_request(users), chunk_size=chunk_size)
+        res = helpers.bulk(client=self.ES, actions=self._build_bulk_request(users), chunk_size=chunk_size)
+        return res
 
     @abstractmethod
     def _build_bulk_request(self, users):
@@ -104,47 +105,47 @@ class GameCruncher(Cruncher):
             for f in self.AE:
                 self.baptorgameseffectivelycrunched.add(int(game['_id']))
                 user = f(user, game).apply()
-                user["games_id_list"].append(int(game['_id']))
-                self.USERS[user_id] = user
+            user["games_id_list"].append(int(game['_id']))
+            self.USERS[user_id] = user
 
     def _build_bulk_request(self, users):
-
         for user in users:
             query = {
                 "_op_type": "update",
                 "_id": user['id'],
                 "_index": 'test',
                 "_type": 'user',
-                "script": "update_agg_data",
+                "script": "testscript",
                 "params": {"data": json.dumps(user)},
-                "lang": "python"
+                "lang": "python",
+                "upsert": user,
                 }
             yield query
 
-    def _build_bulk_request_mvel(self, users):
-        """
-
-        :param users:
-        :return:
-        """
-        for user in users:
-            update = []
-            update.append("ctx._source.games_id_list += "+str(user["games_id_list"]))
-            for k, v in user["aggregate"].items():
-                if isinstance(v, dict):
-                    for k2,v2 in v.items():
-                        update.append("ctx._source.aggregate."+str(k)+"."+str(k2)+" += "+str(v2))
-                else:
-                    update.append("ctx._source.aggregate."+str(k)+" += "+str(v))
-            query = {
-                "_op_type": "update",
-                "_id": user['id'],
-                "_index": 'ritou',
-                "_type": 'user',
-                "params": {},
-                "script": "\n".join(update),
-                "upsert": user}
-            yield query
+    # def _build_bulk_request(self, users):
+    #     """
+    #
+    #     :param users:
+    #     :return:
+    #     """
+    #     for user in users:
+    #         update = []
+    #         update.append("ctx._source.games_id_list += "+str(user["games_id_list"]))
+    #         for k, v in user["aggregate"].items():
+    #             if isinstance(v, dict):
+    #                 for k2,v2 in v.items():
+    #                     update.append("ctx._source.aggregate."+str(k)+"."+str(k2)+" += "+str(v2))
+    #             else:
+    #                 update.append("ctx._source.aggregate."+str(k)+" += "+str(v))
+    #         query = {
+    #             "_op_type": "update",
+    #             "_id": user['id'],
+    #             "_index": 'ritou',
+    #             "_type": 'user',
+    #             "params": {},
+    #             "script": update,
+    #             "upsert": user}
+    #         yield query
 
 
 class UserCruncher(Cruncher):
@@ -184,7 +185,8 @@ class UserCruncher(Cruncher):
                 "_type": 'user',
                 "script": "update_agg_data",
                 "params": {"data": json.dumps(user)},
-                "lang": "python"
+                "lang": "python",
+                "upsert": user,
                 }
             yield query
 
