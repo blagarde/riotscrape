@@ -108,16 +108,12 @@ class GameCruncher(Cruncher):
                 self.USERS[user_id] = user
 
     def _build_bulk_request(self, users):
-        """
 
-        :param users:
-        :return: a generator which yields queries
-        """
         for user in users:
             query = {
                 "_op_type": "update",
                 "_id": user['id'],
-                "_index": 'ritou',
+                "_index": 'test',
                 "_type": 'user',
                 "script": "update_agg_data",
                 "params": {"data": json.dumps(user)},
@@ -184,12 +180,12 @@ class UserCruncher(Cruncher):
             query = {
                 "_op_type": "update",
                 "_id": user['id'],
-                "_index": 'ritou',
+                "_index": 'test',
                 "_type": 'user',
-                "params": {"feat": user["feature"]},
-                "script": "ctx._source.feature = feat",
-                "upsert": user
-            }
+                "script": "update_agg_data",
+                "params": {"data": json.dumps(user)},
+                "lang": "python"
+                }
             yield query
 
 
@@ -198,6 +194,9 @@ def launch_cruncher(cruncher):
     cr.crunch()
 
 if __name__ == '__main__':
-    pool = Pool(processes=NB_PROCESSES)
-    pool.map(launch_cruncher, [GameCruncher for _ in range(NB_PROCESSES*100)])
+    gc = GameCruncher()
+    gc.crunch()
+
+    # pool = Pool(processes=NB_PROCESSES)
+    # pool.map(launch_cruncher, [GameCruncher for _ in range(NB_PROCESSES*100)])
     #pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES*100)])
