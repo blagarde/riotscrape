@@ -132,13 +132,15 @@ class UserCruncher(Cruncher):
         self.FE = [ProbaExtractor, RulesExtractor]
 
     def _init_ids(self):
-        self.content = self.buffer.pipeline().lrange('users',0,10000).ltrim('users', 10000, -1).execute()[0]
+        self.content = self.buffer.pipeline().lrange('users',0,10000).ltrim('users', 10001, -1).execute()[0]
         self.USERS_ID = self.buffer.smembers('users_set')
 
     def _get_content(self, userids):
         body = {'ids': userids}
         users = self.ES.mget(index="ritou", doc_type="user", body=body)
-        return [user for user in users["docs"]]
+        res = [user for user in users["docs"]]
+        print len(res)
+        return res
 
     def _process_content(self, user):
         if user["found"] == True:
@@ -169,5 +171,5 @@ def launch_cruncher(cruncher):
     cr.crunch()
 
 pool = Pool(processes=NB_PROCESSES)
-pool.map(launch_cruncher, [GameCruncher for _ in range(NB_PROCESSES*100)])
-#pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES*100)])
+#pool.map(launch_cruncher, [GameCruncher for _ in range(NB_PROCESSES*100)])
+pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES*1000)])
