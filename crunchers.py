@@ -115,58 +115,11 @@ class GameCruncher(Cruncher):
                 "_id": user['id'],
                 "_index": 'test',
                 "_type": 'user',
-                "script": "test_baptiste",
+                "script": "update_agg_data",
+                "params": {"data": json.dumps(user)},
                 "upsert": user,
                 }
             yield query
-
-    # def _build_bulk_request(self, users):
-    #     for user in users:
-    #         query = {
-    #             "_op_type": "update",
-    #             "_id": user['id'],
-    #             "_index": 'test',
-    #             "_type": 'user',
-    #             "script": "aggdata",
-    #             "params": {"data": self._back_back_this(json.dumps(user))},
-    #             "lang": "python",
-    #             "upsert": user,
-    #             }
-    #         yield query
-    #
-    # def _back_back_this(self, s):
-    #    res = ""
-    #    for c in s:
-    #        if c == '"':
-    #            res += '\\\"'
-    #        else:
-    #            res += c
-    #    return res
-
-    # def _build_bulk_request(self, users):
-    #     """
-    #
-    #     :param users:
-    #     :return:
-    #     """
-    #     for user in users:
-    #         update = []
-    #         update.append("ctx._source.games_id_list += "+str(user["games_id_list"]))
-    #         for k, v in user["aggregate"].items():
-    #             if isinstance(v, dict):
-    #                 for k2,v2 in v.items():
-    #                     update.append("ctx._source.aggregate."+str(k)+"."+str(k2)+" += "+str(v2))
-    #             else:
-    #                 update.append("ctx._source.aggregate."+str(k)+" += "+str(v))
-    #         query = {
-    #             "_op_type": "update",
-    #             "_id": user['id'],
-    #             "_index": 'ritou',
-    #             "_type": 'user',
-    #             "params": {},
-    #             "script": update,
-    #             "upsert": user}
-    #         yield query
 
 
 class UserCruncher(Cruncher):

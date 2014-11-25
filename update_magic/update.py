@@ -4,10 +4,10 @@ import json
 
 
 class UpdateTraining(object):
-    es = Elasticsearch([{'host': 'localhost', 'port': 9200}])
+    es = Elasticsearch([{'host': '130.211.49.140', 'port': 8000}])
 
     def index_user(self):
-        return self.es.index(index='rita', doc_type='user', id=1, body=user)
+        return self.es.index(index='test', doc_type='user', id=1, body=user)
 
     def update_user(self, data):
         return helpers.bulk(client=self.es, actions=self.build_actions(data))
@@ -17,9 +17,9 @@ class UpdateTraining(object):
             query = {
                 "_op_type": "update",
                 "_id": 1,
-                "_index": 'rita',
+                "_index": 'test',
                 "_type": 'user',
-                "script": "last_hope",
+                "script": "update_agg_data",
                 "params": {"data": json.dumps(d)},
                 "upsert": d,
                 }
@@ -30,5 +30,5 @@ class UpdateTraining(object):
 
 if __name__ == "__main__":
     ut = UpdateTraining()
-    print ut.index_user()
+    # ut.index_user()
     print ut.update_user([to_add])

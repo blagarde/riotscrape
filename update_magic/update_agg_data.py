@@ -10,4 +10,7 @@ for field, value in dat["aggregate"].items():
             else:
                 ctx['_source']["aggregate"]["nChamp"][champ_id] = count
     else:
-       ctx['_source']["aggregate"][field] += value
+        if field in ctx['_source']["aggregate"]:
+            ctx['_source']["aggregate"][field] += value
+        else :
+            ctx['_source']["aggregate"][field] = value
