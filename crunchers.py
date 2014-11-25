@@ -1,5 +1,6 @@
 from multiprocessing import Pool
-from aggregate_extractor import ChampionExtractor, GameModeExtractor,QueueTypeExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor
+from aggregate_extractor import ChampionExtractor, GameModeExtractor,\
+    QueueTypeExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor
 from elasticsearch.client import Elasticsearch
 from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, RIOT_INDEX, NB_PROCESSES
 from redis import StrictRedis as Buffer
@@ -10,7 +11,7 @@ from abc import abstractmethod
 from time import time
 import sys
 import json
-import os
+
 
 class Cruncher(object):
 
@@ -43,7 +44,7 @@ class Cruncher(object):
             for cont in conts:
                 self._process_content(cont)
             t_end = time()
-            out = "\rgames crunched\t%s\tchunk time\t%s" % ((i)*self.chunk_size, t_end-t_start)
+            out = "\rgames crunched\t%s\tchunk time\t%s" % (i*self.chunk_size, t_end-t_start)
             sys.stdout.write(out)
             sys.stdout.flush()
         req = self.buffer.pipeline()
@@ -113,7 +114,7 @@ class GameCruncher(Cruncher):
             query = {
                 "_op_type": "update",
                 "_id": user['id'],
-                "_index": 'test',
+                "_index": 'lagrosserita',
                 "_type": 'user',
                 "script": "update_agg_data",
                 "params": {"data": json.dumps(user)},
@@ -129,7 +130,7 @@ class UserCruncher(Cruncher):
         self.FE = [ProbaExtractor, RulesExtractor]
 
     def _init_ids(self):
-        self.content = self.buffer.pipeline().lrange('users',0,10000).ltrim('users', 10001, -1).execute()[0]
+        self.content = self.buffer.pipeline().lrange('users', 0, 10000).ltrim('users', 10001, -1).execute()[0]
         self.USERS_ID = self.buffer.smembers('users_set')
 
     def _get_content(self, userids):
@@ -151,17 +152,15 @@ class UserCruncher(Cruncher):
                 print user
 
     def _build_bulk_request(self, users):
+        # TODO : write the correct query
         for user in users:
             query = {
                 "_op_type": "update",
                 "_id": user['id'],
-                "_index": 'test',
+                "_index": 'lagrosserita',
                 "_type": 'user',
-                "script": "update_agg_data",
-                "params": {"data": json.dumps(user)},
-                "lang": "python",
-                "upsert": user,
-                }
+                "doc": { },
+                "upsert": user}
             yield query
 
 
@@ -170,9 +169,6 @@ def launch_cruncher(cruncher):
     cr.crunch()
 
 if __name__ == '__main__':
-    gc = GameCruncher()
-    gc.crunch()
-
-    # pool = Pool(processes=NB_PROCESSES)
-    # pool.map(launch_cruncher, [GameCruncher for _ in range(NB_PROCESSES*100)])
-    #pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES*100)])
+    pool = Pool(processes=NB_PROCESSES)
+    pool.map(launch_cruncher, [GameCruncher for _ in range(NB_PROCESSES*100)])
+    # pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES*100)])
