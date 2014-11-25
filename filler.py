@@ -4,15 +4,11 @@
 
 users = []
 games = []
-file_ = open("redis.txt", "w")
+file_ = open("redis.txt", "a+")
 
-with open("games_sample.txt", "r") as f:
+with open("games.txt", "r") as f:
     for gameid in f.readlines():
-        file_.write("LPUSH games "+str(gameid[:-1])+"\n")
+        file_.write("ZADD games 0 "+str(gameid[:-1])+"\n")
 
-with open("users_sample.txt", "r") as f:
-    for userid in f.readlines():
-        # file_.write("LPUSH users "+str(userid[:-1])+"\n")
-        file_.write("SADD users_set "+str(userid[:-1])+"\n")
 
 file_.close()
