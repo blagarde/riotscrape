@@ -89,21 +89,25 @@ class ChampionExtractor(AggregateExtractor):
 class ParticipantStatsExtractor(AggregateExtractor):
     P_STATS = [('nKills', 'kills'), ('nDeaths', 'deaths'), ('nAssists', 'assists'),
                ('nCreepsTeam', 'neutralMinionsKilledTeamJungle'), ('nCreepsEnemy', 'neutralMinionsKilledEnemyJungle'),
-               ('nMinions', 'minionsKilled'), ('nTowers', 'towerKills'),  ('nLevel', 'champLevel'),
-               ('nWardsKilled', 'wardsKilled'), ('nWards', 'wardsPlaced')]
+               ('nMinions', 'minionsKilled'), ('nPlayerTowers', 'towerKills'),  ('nLevel', 'champLevel'),
+               ('nWardsKilled', 'wardsKilled'), ('nWards', 'wardsPlaced'), ('nFirstBlood','firstBloodKill'), ('nFirstBloodAssist','firstBloodAssist'),
+               ('nKillingSprees', 'killingSprees'), ('nVisionWards', 'visionWardsBoughtInGame'), ('nCrowedControl','totalTimeCrowdControlDealt'),
+               ('nGold','goldEarned'), ('nPlayerInhibitor','inhibitorKills')]
 
     @classic_game_only
     def apply(self):
         participant_id = self.get_participant_id(self.game, self.user["id"])
         participant = self.get_participant(self.game, participant_id)
         for pair in self.P_STATS:
-            self.aggregate[pair[0]] += participant["stats"][pair[1]]
+            if pair[1] in participant["stats"]:
+                self.aggregate[pair[0]] += participant["stats"][pair[1]]
         return self.user
 
 
 class TeamStatsExtractor(AggregateExtractor):
     T_STATS = [('nDragons', 'dragonKills'), ('nBarons', 'baronKills'),
-               ('nInhibitor', 'inhibitorKills'), ('nVictory', 'winner')]
+               ('nInhibitor', 'inhibitorKills'), ('nVictory', 'winner'),
+               ('nTowers','towerKills')]
 
     @classic_game_only
     def apply(self):

@@ -7,8 +7,6 @@ from user import User
 from elasticsearch import helpers
 from feature_extractor import ProbaExtractor, RulesExtractor
 from abc import abstractmethod
-from time import time
-import sys
 import json
 
 
@@ -20,8 +18,6 @@ class Cruncher(object):
         self.chunk_size = 100
         self._init_ids()
         self.USERS = {}
-        self.baptorgameseffectivelycrunched = set()
-        self.idontcareabouttheseids = set()
 
     @abstractmethod
     def _init_ids(self):
@@ -36,31 +32,23 @@ class Cruncher(object):
         pass
 
     def crunch(self):
-        chunks = [self.content[x:x+self.chunk_size] for x in xrange(0, len(self.content), self.chunk_size)]
-        for i, chunk in enumerate(chunks):
-            t_start = time()
+        chunks = [(x,x+self.chunk_size) for x in xrange(0, len(self.content), self.chunk_size)]
+        for a,b in chunks:
+            chunk = self.content[a:b]
             conts = self._get_content(chunk)
             for cont in conts:
                 self._process_content(cont)
-            t_end = time()
-            out = "\rgames crunched\t%s\tchunk time\t%s" % ((i)*self.chunk_size, t_end-t_start)
-            sys.stdout.write(out)
-            sys.stdout.flush()
-        req = self.buffer.pipeline()
-        for gid in self.baptorgameseffectivelycrunched:
-            req.lpush("baptor", gid)
-        req.execute()
-        req = self.buffer.pipeline()
-        for uid in self.idontcareabouttheseids:
-            req.sadd("bite", uid)
-        req.execute()
-        self.baptorgameseffectivelycrunched = set()
-        self.idontcareabouttheseids = set()
+        self._end_crunching()
         self.insert_users()
 
-    def insert_users(self, chunk_size=2000):
+    @abstractmethod
+    def _end_crunching(self):
+        pass
+
+    def insert_users(self, chunk_size=100):
         users = [user for _, user in self.USERS.items()]
-        return helpers.bulk(client=self.ES, actions=self._build_bulk_request(users), chunk_size=chunk_size)
+        self._build_bulk_request(users)
+        #return helpers.bulk(client=self.ES, actions=self._build_bulk_request(users), chunk_size=chunk_size)
 
     @abstractmethod
     def _build_bulk_request(self, users):
@@ -73,9 +61,20 @@ class GameCruncher(Cruncher):
         Cruncher.__init__(self)
         self.AE = [QueueTypeExtractor, GameModeExtractor, ChampionExtractor,
                    ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor]
+        self.gamesnotfound = set()
+
+    def _end_crunching(self):
+        req = self.buffer.pipeline()
+        for i,ui in enumerate(self.USERS):
+            req.zadd("users", i, ui)
+        req.execute()
+        req = self.buffer.pipeline()
+        for gid in self.gamesnotfound:
+            req.sadd("gamesnotfound", gid)
+        req.execute()
 
     def _init_ids(self):
-        self.content = self.buffer.pipeline().lrange('games', 0, 1000).ltrim('games', 1000, -1).execute()[0]
+        self.content = self.buffer.pipeline().zrange('games', 0, 1000).zremrangebyrank('games', 0, 1000).execute()[0]
         self.USERS_ID = set(self.buffer.smembers('users_set'))
 
     def _get_content(self, games_id):
@@ -85,6 +84,7 @@ class GameCruncher(Cruncher):
 
     def _process_content(self, game):
         if not game['found']:
+            self.gamesnotfound.add(game["_id"])
             return
         for participant in game["_source"]["participantIdentities"]:
             self._process_participant(participant, game)
@@ -95,61 +95,37 @@ class GameCruncher(Cruncher):
         else:
             user_id = participant["player"]["summonerId"]
             if str(user_id) not in self.USERS_ID:
-                self.idontcareabouttheseids.add(user_id)
                 return
             try:
                 user = self.USERS[user_id]
             except KeyError:
                 user = User(user_id)
+            user["games_id_list"].append(int(game['_id']))
             for f in self.AE:
-                self.baptorgameseffectivelycrunched.add(int(game['_id']))
                 user = f(user, game).apply()
-                user["games_id_list"].append(int(game['_id']))
                 self.USERS[user_id] = user
 
     def _build_bulk_request(self, users):
-        """
-
-        :param users:
-        :return: a generator which yields queries
-        """
         for user in users:
             query = {
-                "_op_type": "update",
-                "_id": user['id'],
-                "_index": 'ritou',
-                "_type": 'user',
-                "script": "update_agg_data",
-                "params": {"data": json.dumps(user)},
-                "lang": "python"
+                "script": "import json\ndat = json.loads(data)\nctx['_source']['games_id_list'] += dat['games_id_list']\nfor field, value in dat['aggregate'].items():\n\tif field == 'nChamp':\n\t\tpass\n\telse:\n\t\tif field in ctx['_source']['aggregate']:\n\t\t\tctx['_source']['aggregate'][field] += value\n\t\telse:\n\t\t\tctx['_source']['aggregate'][field] = value",
+                "params": {"data": self._backbackthis(json.dumps(user))},
+                "lang": "python",
+                "upsert": user,
                 }
-            yield query
+            res = self.ES.update('ritoo', 'user', user['id'], query)
+            print res
+            #yield query
 
-    def _build_bulk_request_mvel(self, users):
-        """
 
-        :param users:
-        :return:
-        """
-        for user in users:
-            update = []
-            update.append("ctx._source.games_id_list += "+str(user["games_id_list"]))
-            for k, v in user["aggregate"].items():
-                if isinstance(v, dict):
-                    for k2,v2 in v.items():
-                        update.append("ctx._source.aggregate."+str(k)+"."+str(k2)+" += "+str(v2))
-                else:
-                    update.append("ctx._source.aggregate."+str(k)+" += "+str(v))
-            query = {
-                "_op_type": "update",
-                "_id": user['id'],
-                "_index": 'ritou',
-                "_type": 'user',
-                "params": {},
-                "script": "\n".join(update),
-                "upsert": user}
-            yield query
-
+    def _backbackthis(self, s):
+        res = ""
+        for c in s:
+            if c == '"':
+                res += '\\\"'
+            else:
+                res += c
+        return res
 
 class UserCruncher(Cruncher):
     
@@ -158,46 +134,43 @@ class UserCruncher(Cruncher):
         self.FE = [ProbaExtractor, RulesExtractor]
 
     def _init_ids(self):
-        self.content = self.buffer.pipeline().lrange('users',0,10000).ltrim('users', 10001, -1).execute()[0]
+        self.content = self.buffer.pipeline().zrange('users', 0, 1000).zremrangebyrank('users', 0, 1000).execute()[0]
+        
         self.USERS_ID = self.buffer.smembers('users_set')
 
     def _get_content(self, userids):
         body = {'ids': userids}
-        users = self.ES.mget(index="ritou", doc_type="user", body=body)
+        users = self.ES.mget(index="ritoo", doc_type="user", body=body)
         res = [user for user in users["docs"]]
-        print len(res)
         return res
 
     def _process_content(self, user):
         if user["found"]:
             user = user["_source"]
-            try:
-                for f in self.FE:
-                    user = f(user).apply()
-                    self.USERS[user["id"]] = user
-            except Exception as e:
-                print e
-                print user
+            for f in self.FE:
+                user = f(user).apply()
+                self.USERS[user["id"]] = user
+#         else:
+#             print "user not found"
+
 
     def _build_bulk_request(self, users):
         for user in users:
             query = {
-                "_op_type": "update",
-                "_id": user['id'],
-                "_index": 'ritou',
-                "_type": 'user',
-                "params": {"feat": user["feature"]},
                 "script": "ctx._source.feature = feat",
-                "upsert": user
-            }
-            yield query
-
+                "params": {"feat": user["feature"]},
+                }
+            self.ES.update('ritoo', 'user', user['id'], query)
 
 def launch_cruncher(cruncher):
     cr = cruncher()
     cr.crunch()
 
+
 if __name__ == '__main__':
-    pool = Pool(processes=NB_PROCESSES)
-    pool.map(launch_cruncher, [GameCruncher for _ in range(NB_PROCESSES*100)])
-    #pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES*100)])
+    while True:
+        launch_cruncher(GameCruncher)
+        launch_cruncher(UserCruncher)
+#     pool = Pool(processes=NB_PROCESSES)
+#     pool.map(launch_cruncher, [GameCruncher for _ in range(NB_PROCESSES*100)])
+#     pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES*100)])
