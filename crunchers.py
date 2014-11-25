@@ -115,12 +115,33 @@ class GameCruncher(Cruncher):
                 "_id": user['id'],
                 "_index": 'test',
                 "_type": 'user',
-                "script": "testscript",
-                "params": {"data": json.dumps(user)},
-                "lang": "python",
+                "script": "test_baptiste",
                 "upsert": user,
                 }
             yield query
+
+    # def _build_bulk_request(self, users):
+    #     for user in users:
+    #         query = {
+    #             "_op_type": "update",
+    #             "_id": user['id'],
+    #             "_index": 'test',
+    #             "_type": 'user',
+    #             "script": "aggdata",
+    #             "params": {"data": self._back_back_this(json.dumps(user))},
+    #             "lang": "python",
+    #             "upsert": user,
+    #             }
+    #         yield query
+    #
+    # def _back_back_this(self, s):
+    #    res = ""
+    #    for c in s:
+    #        if c == '"':
+    #            res += '\\\"'
+    #        else:
+    #            res += c
+    #    return res
 
     # def _build_bulk_request(self, users):
     #     """

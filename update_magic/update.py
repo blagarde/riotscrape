@@ -2,6 +2,7 @@ from elasticsearch import Elasticsearch, helpers
 from update_data import user, to_add, user_updated
 import json
 
+
 class UpdateTraining(object):
     es = Elasticsearch([{'host': 'localhost', 'port': 9200}])
 
@@ -18,9 +19,8 @@ class UpdateTraining(object):
                 "_id": 1,
                 "_index": 'rita',
                 "_type": 'user',
-                "script": "add_to_user",
+                "script": "last_hope",
                 "params": {"data": json.dumps(d)},
-                "lang": "python",
                 "upsert": d,
                 }
             yield query
@@ -30,5 +30,5 @@ class UpdateTraining(object):
 
 if __name__ == "__main__":
     ut = UpdateTraining()
-    # print ut.index_user()
+    print ut.index_user()
     print ut.update_user([to_add])
