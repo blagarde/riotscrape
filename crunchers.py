@@ -102,7 +102,6 @@ class GameCruncher(Cruncher):
             except KeyError:
                 user = User(user_id)
             for f in self.AE:
-                self.baptorgameseffectivelycrunched.add(int(game['_id']))
                 user = f(user, game).apply()  
             user["games_id_list"].append(int(game['_id']))
             self.USERS[user_id] = user
