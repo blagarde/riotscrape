@@ -116,16 +116,16 @@ class RulesExtractor(FeatureExtractor):
             if type(v) != dict:
                 user["feature"][k] = v(user)
             else:
-                coeffSum = 0
+                coeff_sum = 0
                 res = 0
                 for key, val in v.items():
                     if key not in user["feature"]:
                         user["feature"][key] = 0
                     if val < 0:
                         res += -val*(1-user["feature"][key])
-                        coeffSum += -val
+                        coeff_sum += -val
                     else:
                         res += val*user["feature"][key]
-                        coeffSum += val 
-                user["feature"][k] = res/coeffSum
+                        coeff_sum += val
+                user["feature"][k] = res/coeff_sum
         return user
