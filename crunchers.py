@@ -33,8 +33,8 @@ class Cruncher(object):
         pass
 
     def crunch(self):
-        chunks = [(x,x+self.chunk_size) for x in xrange(0, len(self.content), self.chunk_size)]
-        for a,b in chunks:
+        chunks = [(x, x+self.chunk_size) for x in xrange(0, len(self.content), self.chunk_size)]
+        for a, b in chunks:
             chunk = self.content[a:b]
             conts = self._get_content(chunk)
             for cont in conts:
@@ -54,7 +54,6 @@ class Cruncher(object):
     def _build_bulk_request(self, users):
         pass
     
-    
 
 class GameCruncher(Cruncher):
     
@@ -66,7 +65,7 @@ class GameCruncher(Cruncher):
 
     def _end_crunching(self):
         req = self.buffer.pipeline()
-        for i,ui in enumerate(self.USERS):
+        for i, ui in enumerate(self.USERS):
             req.zadd("users", i, ui)
         req.execute()
         req = self.buffer.pipeline()
@@ -115,8 +114,7 @@ class GameCruncher(Cruncher):
                 "_type": 'user',
                 "script": "update_agg_data",
                 "params": {"data": json.dumps(user)},
-                "upsert": user,
-                }
+                "upsert": user}
             yield query
 
 
@@ -144,16 +142,19 @@ class UserCruncher(Cruncher):
             self.USERS[user["id"]] = user
 
     def _build_bulk_request(self, users):
-        # TODO : write the correct query
+        # TODO : MUST be tested before being used in prod
         for user in users:
             query = {
                 "_op_type": "update",
                 "_id": user['id'],
                 "_index": 'lagrosserita',
                 "_type": 'user',
-                "doc": { },
+                "doc": {"feature": user["feature"]},
                 "upsert": user}
             yield query
+
+    def _end_crunching(self):
+        pass
 
 
 def launch_cruncher(cruncher):
