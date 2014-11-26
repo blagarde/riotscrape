@@ -1,7 +1,3 @@
-# from config import REDIS_PARAM
-# from redis import StrictRedis as Buffer
-# from multiprocessing import Pool
-
 users = []
 games = []
 file_ = open("redis.txt", "a+")
