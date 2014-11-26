@@ -1,10 +1,16 @@
 from elasticsearch import Elasticsearch, helpers
-from update_data import user, to_add, user_updated
+from data_sample import user, to_add
 import json
 
 
-class UpdateTraining(object):
-    es = Elasticsearch([{'host': '130.211.49.140', 'port': 8000}])
+#NOTA : before trying this example you need to :
+#        - create a test index on your local ES cluster
+#        - install the lang-python plugin
+#        - copy the update_agg_data.py file in your directory elasticsearch/config/script/
+
+
+class ScriptingModuleExample(object):
+    es = Elasticsearch([{'host': 'localhost', 'port': 9200}])
 
     def index_user(self):
         return self.es.index(index='test', doc_type='user', id=1, body=user)
@@ -21,14 +27,10 @@ class UpdateTraining(object):
                 "_type": 'user',
                 "script": "update_agg_data",
                 "params": {"data": json.dumps(d)},
-                "upsert": d,
                 }
             yield query
 
-    def update(self):
-        self.es.update(index='rita', doc_type='user', id=1, body={"script": "ctx._source.nMinions += 100"})
-
 if __name__ == "__main__":
-    ut = UpdateTraining()
-    # ut.index_user()
-    print ut.update_user([to_add])
+    sme = ScriptingModuleExample()
+    print sme.index_user()
+    print sme.update_user([to_add])
