@@ -142,7 +142,6 @@ class UserCruncher(Cruncher):
             self.USERS[user["id"]] = user
 
     def _build_bulk_request(self, users):
-        # TODO : MUST be tested before being used in prod
         for user in users:
             query = {
                 "_op_type": "update",
