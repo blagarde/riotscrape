@@ -103,7 +103,8 @@ class RulesExtractor(FeatureExtractor):
             "diversity": {"pSubGame": 1}
         }
 
-    def _loyalty(self, user):
+    @staticmethod
+    def _loyalty(user):
         f = lambda x: x * log(x) if x != 0 else 0
         l = [float(champ_count)/user["aggregate"]["nGame"] for _, champ_count in user["aggregate"]["nChamp"].items()]
         s = sum(map(f, l))
@@ -117,14 +118,14 @@ class RulesExtractor(FeatureExtractor):
             else:
                 coeffSum = 0
                 res = 0
-                for key,val in v.items():
+                for key, val in v.items():
                     if key not in user["feature"]:
                         user["feature"][key] = 0
                     if val < 0:
-                        res += -val * (1-user["feature"][key])
+                        res += -val*(1-user["feature"][key])
                         coeffSum += -val
                     else:
-                        res += val * user["feature"][key]
+                        res += val*user["feature"][key]
                         coeffSum += val 
-                user["feature"][k] = res / coeffSum
+                user["feature"][k] = res/coeffSum
         return user
