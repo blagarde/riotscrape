@@ -5,7 +5,7 @@ from threading import Thread, Lock
 from queue import Queue
 from collections import defaultdict
 from itertools import chain
-from config import KEYS, ES_NODES, RIOT_DOCTYPE, RIOT_INDEX
+from config import KEYS, ES_NODES, GAME_DOCTYPE, RIOT_INDEX
 from riotwatcher.riotwatcher import RiotWatcher, EUROPE_WEST, RateLimit
 from elasticsearch import Elasticsearch
 from time import sleep
@@ -114,7 +114,7 @@ class WatcherThread(Thread):
     def do_game(self, gameid):
         dumpme = self.watcher.get_match(gameid, region=EUROPE_WEST, include_timeline=True)
         self.reqs['games'] += 1
-        ES.index(index=RIOT_INDEX, doc_type=RIOT_DOCTYPE, id=gameid, body=dumpme)
+        ES.index(index=RIOT_INDEX, doc_type=GAME_DOCTYPE, id=gameid, body=dumpme)
         participants = [dct['player']['summonerId'] for dct in dumpme['participantIdentities']]
         self._add_users(participants)
 
