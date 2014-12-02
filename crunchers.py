@@ -101,7 +101,7 @@ class GameCruncher(Cruncher):
             except KeyError:
                 user = User(user_id)
             for f in self.AE:
-                user = f(user, game).apply()  
+                user = f(user, game["_source"]).apply()
             user["games_id_list"].append(int(game['_id']))
             self.USERS[user_id] = user
 
@@ -138,7 +138,7 @@ class UserCruncher(Cruncher):
         if user["found"]:
             user = user["_source"]
             for f in self.FE:
-                user = f(user).apply()
+                user = f(user["_source"]).apply()
             self.USERS[user["id"]] = user
 
     def _build_bulk_request(self, users):

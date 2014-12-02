@@ -19,7 +19,7 @@ class AggregateExtractor(Extractor):
     def __init__(self, user, game):
         self.user = user
         self.aggregate = self.user["aggregate"]
-        self.game = game['_source']
+        self.game = game
 
     @abc.abstractmethod
     def apply(self):
