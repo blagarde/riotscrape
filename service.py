@@ -8,7 +8,7 @@ from config import ES_NODES
 from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import TransportError
 
-RIOT_KEY_ID= '94b01087-f844-4f6b-8d00-8520cfbf5eec'
+RIOT_KEY_ID = '94b01087-f844-4f6b-8d00-8520cfbf5eec'
 RIOT_KEY_GAME = 'd3928411-a85e-48b2-8686-15cff70e8064'
 
 
@@ -23,7 +23,7 @@ class Service(object):
                 try:
                     summoner_id = self.id_watcher.get_summoner(name=summoner_name, region=region)['id']
                 except LoLException:
-                    return ('404', {})
+                    return '404', {}
                 try:
                     res = self.es.get(id=summoner_id, index='rita', doc_type='user')
                     print "from es"
@@ -35,9 +35,9 @@ class Service(object):
                     luc = LiteGameCruncher(summoner_id, games)
                     user = luc.crunch()
                     if user.is_valid():
-                        return ('200', user)
+                        return '200', user
                     else:
-                        return ('204', {})
+                        return '204', {}
             else:
                 sleep(0.001)
 
@@ -98,6 +98,6 @@ class LiteGameCruncher(object):
 if __name__ == "__main__":
     se = Service()
     t_start = time()
-    print se.get_crunched_user('cobiss','euw')
+    print se.get_crunched_user('cobiss', 'euw')
     t_end = time()
     print t_end-t_start
