@@ -1,7 +1,7 @@
 from aggregate_extractor import ChampionExtractor, GameModeExtractor,\
     QueueTypeExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor
 from feature_extractor import ProbaExtractor, RulesExtractor
-from riotwatcher.riotwatcher import RiotWatcher
+from riotwatcher.riotwatcher import RiotWatcher, LoLException
 from user import User
 from time import sleep, time
 from config import ES_NODES
@@ -20,18 +20,23 @@ class Service(object):
     def get_crunched_user(self, summoner_name, region):
         while True:
             if self.id_watcher.can_make_request():
-                summoner_id = self.id_watcher.get_summoner(name=summoner_name, region=region)['id']
-                # TODO : handle the case when id is not found
+                try:
+                    summoner_id = self.id_watcher.get_summoner(name=summoner_name, region=region)['id']
+                except LoLException:
+                    return ('404', {})
                 try:
                     res = self.es.get(id=summoner_id, index='rita', doc_type='user')
-                    print "known"
                     return res['_source']
                 except TransportError:
                     # TODO: send to baptor redis
                     game_ids = self._get_game_ids(summoner_id, region)
                     games = self._get_games(game_ids, region)
-                    luc = LiteUserCruncher(summoner_id, games)
-                    return luc.crunch()
+                    luc = LiteGameCruncher(summoner_id, games)
+                    user = luc.crunch()
+                    if user.is_valid():
+                        return ('200', user)
+                    else:
+                        return ('204', {})
             else:
                 sleep(0.001)
 
@@ -56,7 +61,7 @@ class Service(object):
                     sleep(0.001)
 
 
-class LiteUserCruncher(object):
+class LiteGameCruncher(object):
     AE = [QueueTypeExtractor, GameModeExtractor, ChampionExtractor,
           ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor]
     FE = [ProbaExtractor, RulesExtractor]
@@ -92,7 +97,6 @@ class LiteUserCruncher(object):
 if __name__ == "__main__":
     se = Service()
     t_start = time()
-    for i in range(1,10):
-        print se.get_crunched_user('tronsonator','euw')
+    print se.get_crunched_user('dipl0mate','euw')
     t_end = time()
     print t_end-t_start

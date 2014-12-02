@@ -10,3 +10,6 @@ class User(dict):
         self['aggregate']['nChamp'] = defaultdict(int)
         self['games_id_list'] =[]
 
+    def is_valid(self):
+        return self['feature'].values() == [0]
+
