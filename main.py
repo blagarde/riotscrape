@@ -1,21 +1,19 @@
 # -*- coding: utf-8 -*-
-import os
 import sys
 from threading import Thread, Lock
-from queue import Queue
 from collections import defaultdict
 from itertools import chain
 from config import KEYS, ES_NODES, GAME_DOCTYPE, RIOT_INDEX
 from riotwatcher.riotwatcher import RiotWatcher, EUROPE_WEST, RateLimit
 from elasticsearch import Elasticsearch
 from time import sleep
-import random
+from redis import StrictRedis
 
 
-USERS_FILE = 'users.txt'
-GAMES_FILE = 'games.txt'
+ALL_USERS = '100k_users.txt'  # arbitrary
+ALL_GAMES = 'games.txt'  # all IDs we know about
+DONE_GAMES = 'done_games.txt'  # in rito
 ES = Elasticsearch(ES_NODES)
-MAX_USERS = 1000000
 
 
 def squelch_errors(method):
@@ -37,50 +35,66 @@ def squelch_errors(method):
 
 
 class Tasks(object):
-    games = set()
-    gq = Queue()
-    users = []
-    user_set = set()
+    redis = StrictRedis()
     lock = Lock()
-    user_index = 0
+    newness = 0
+
+    @classmethod
+    def init(cls):
+
+        def load(filename):
+            return set([l.rstrip() for l in open(filename) if l.strip() != ''])
+        print("**LOAD**\n")
+        all_games = load(ALL_GAMES)
+        done_games = load(DONE_GAMES)
+        cls.redis.sadd('games', done_games)
+        cls.redis.lpush('game_queue', all_games.difference(done_games))
+
+        all_users = load(ALL_USERS)
+        cls.redis.sadd('users', all_users)
+        cls.redis.lpush('user_queue', all_users)
+        print("**START**\n")
 
     @classmethod
     def get(cls):
-        res = None
+        '''Return a list of games and users to scrape'''
+        NTASKS = 1000
         with cls.lock:
-            if cls.gq.empty():
-                res = ('user', cls.users[cls.user_index])
-                cls.user_index += 1
-                cls.user_index %= MAX_USERS
-            else:
-                res = ('game', cls.gq.get())
-        return res
+            games = cls.redis.rpop('game_queue', 0, NTASKS)
+            new_games = [g for g, is_old in cls._intersect('games', games) if not is_old]
+
+            users = cls.redis.rpop('user_queue', 0, NTASKS - len(new_games))
+            users = [u for u, is_old in cls._intersect('users', users)]
+
+            return new_games, users
 
     @classmethod
-    def put_game(cls, gameid):
+    def add(cls, games, users):
+        '''Stack some new game IDs and user IDs onto Redis'''
         with cls.lock:
-            if gameid not in cls.games:
-                cls.gq.put(gameid)
-                cls.games |= set([gameid])
-                cls._log_game(gameid)
+            new_games = [g for g, is_old in cls._intersect('games', games, insert=False) if not is_old]
+            ngames = len(games)
+            cls.newness = (float(len(new_games)) / ngames) if ngames > 0 else 0
+            cls.redis.lpush('game_queue', new_games)
+
+            # TODO - add a user to redis if not seen for a long time
+            new_users = [u for u, is_old in cls._intersect('users', users, insert=False) if not is_old]
+            cls.redis.lpush('user_queue', new_users)
+
+            with open(ALL_USERS, 'a') as ufh:
+                for u in new_users:
+                    ufh.write("%s\n" % u)
 
     @classmethod
-    def put_user(cls, uid):
-        with cls.lock:
-            if uid not in cls.users and len(cls.users) < MAX_USERS:
-                cls.users += [uid]
-                cls.user_set |= set([uid])
-                cls._log_user(uid)
-
-    @classmethod
-    def _log_game(cls, gameid):
-        with open(GAMES_FILE, 'a') as gf:
-            gf.write('%s\n' % gameid)
-
-    @classmethod
-    def _log_user(cls, uid):
-        with open(USERS_FILE, 'a') as uf:
-            uf.write('%s\n' % uid)
+    def _intersect(cls, keyspace, lst, insert=True):
+        '''Check whether each element of 'lst' is in a redis set at 'keyspace'.
+        Optionally insert.'''
+        p = cls.redis.pipeline()
+        for i in lst:
+            p.sismember(keyspace)
+        if insert:
+            p.sadd(keyspace, *lst)
+        return zip(lst, p.execute())
 
 
 class WatcherThread(Thread):
@@ -92,13 +106,19 @@ class WatcherThread(Thread):
 
     def run(self):
         while True:
-            if self.watcher.can_make_request():
-                taskname, arg = Tasks.get()
-                assert taskname in ('user', 'game')
-                task = getattr(self, 'do_' + taskname)
-                task(arg)
-            else:
-                sleep(0.001)
+            self.games, self.users = [], []
+            games, users = Tasks.get()
+            for taskname, lst in [('game', games), ('user', users)]:
+                for arg in lst:
+                    while True:
+                        if self.watcher.can_make_request():
+                            task = getattr(self, 'do_' + taskname)
+                            task(arg)
+                            break
+                        else:
+                            sleep(0.001)
+            Tasks.add(set(self.games), set(self.users + users))
+            sleep(0.001)
 
     @squelch_errors
     def do_user(self, userid):
@@ -106,9 +126,9 @@ class WatcherThread(Thread):
         self.reqs['users'] += 1
         for game_dct in games:
             fellow_players = [dct['summonerId'] for dct in game_dct['fellowPlayers']]
-            self._add_users(fellow_players)
+            self.users += fellow_players
             gameid = game_dct['gameId']
-            Tasks.put_game(str(gameid))
+            self.games += [gameid]
 
     @squelch_errors
     def do_game(self, gameid):
@@ -116,31 +136,14 @@ class WatcherThread(Thread):
         self.reqs['games'] += 1
         ES.index(index=RIOT_INDEX, doc_type=GAME_DOCTYPE, id=gameid, body=dumpme)
         participants = [dct['player']['summonerId'] for dct in dumpme['participantIdentities']]
-        self._add_users(participants)
-
-    def _add_users(self, usr_lst):
-        for uid in usr_lst:
-            Tasks.put_user(str(uid))
+        self.users += participants
 
 
 class Scraper(object):
-    def __init__(self, challenger_seed=True):
+    def __init__(self):
         self.threads = [WatcherThread(key) for key in KEYS]
-        if challenger_seed:
-            watcher = self.threads[0].watcher
-            challengers = self.get_challengers(watcher)
-            new_challengers = [c for c in challengers if c not in Tasks.users]
-            Tasks.users = new_challengers
         self.display()
-        print("**LOAD**\n")
-        if os.path.exists(GAMES_FILE):
-            Tasks.games |= set([l.rstrip() for l in open(GAMES_FILE) if l.strip() != ''])
-        if os.path.exists(USERS_FILE):
-            users = [l.rstrip() for l in open(USERS_FILE) if l.strip() != '']
-            random.shuffle(users)
-            Tasks.users += users
-            Tasks.user_set |= set(Tasks.users)
-        print("**START**\n")
+        Tasks.init()
         self.display()
 
     def scrape(self):
@@ -150,10 +153,6 @@ class Scraper(object):
             self.display()
             sleep(0.1)
 
-    def get_challengers(self, watcher):
-        league_dct = watcher.get_challenger(region=EUROPE_WEST)
-        return [e['playerOrTeamId'] for e in league_dct['entries']]
-
     def display(self):
         fmt = "\r" + '\t'.join(["u%s/g%s (%%s/%%s)" % (i + 1, i + 1) for i in range(len(self.threads))])
         # out = fmt % tuple(list(range(len(self.threads))) + ['Users', 'Games', 'Index'])
@@ -161,7 +160,7 @@ class Scraper(object):
         counts = [(t.reqs['users'], t.reqs['games']) for t in self.threads]
         out = fmt % tuple(chain(*counts))
         out += '\t' + '\t'.join([str(sum(i)) for i in zip(*counts)])
-        out += '\t' + '\t'.join(map(str, [Tasks.user_index, len(Tasks.users), len(Tasks.games), Tasks.gq.qsize()]))
+        out += '\t' + '\t'.join(map(str, [Tasks.newness])) + '        '
         sys.stdout.write(out)
 
 

@@ -33,8 +33,8 @@ class Cruncher(object):
         pass
 
     def crunch(self):
-        chunks = [(x,x+self.chunk_size) for x in xrange(0, len(self.content), self.chunk_size)]
-        for a,b in chunks:
+        chunks = [(x, x + self.chunk_size) for x in xrange(0, len(self.content), self.chunk_size)]
+        for a, b in chunks:
             chunk = self.content[a:b]
             conts = self._get_content(chunk)
             for cont in conts:
@@ -53,11 +53,10 @@ class Cruncher(object):
     @abstractmethod
     def _build_bulk_request(self, users):
         pass
-    
-    
+
 
 class GameCruncher(Cruncher):
-    
+
     def __init__(self):
         Cruncher.__init__(self)
         self.gamesnotfound = set()
@@ -66,7 +65,7 @@ class GameCruncher(Cruncher):
 
     def _end_crunching(self):
         req = self.buffer.pipeline()
-        for i,ui in enumerate(self.USERS):
+        for i, ui in enumerate(self.USERS):
             req.zadd("users", i, ui)
         req.execute()
         req = self.buffer.pipeline()
@@ -102,7 +101,7 @@ class GameCruncher(Cruncher):
             except KeyError:
                 user = User(user_id)
             for f in self.AE:
-                user = f(user, game).apply()  
+                user = f(user, game).apply()
             user["games_id_list"].append(int(game['_id']))
             self.USERS[user_id] = user
 
@@ -111,17 +110,17 @@ class GameCruncher(Cruncher):
             query = {
                 "_op_type": "update",
                 "_id": user['id'],
-                "_index": 'lagrosserita',
+                "_index": 'rita',
                 "_type": 'user',
                 "script": "update_agg_data",
                 "params": {"data": json.dumps(user)},
                 "upsert": user,
-                }
+            }
             yield query
 
 
 class UserCruncher(Cruncher):
-    
+
     def __init__(self):
         Cruncher.__init__(self)
         self.FE = [ProbaExtractor, RulesExtractor]
@@ -132,7 +131,7 @@ class UserCruncher(Cruncher):
 
     def _get_content(self, userids):
         body = {'ids': userids}
-        users = self.ES.mget(index="lagrosserita", doc_type="user", body=body)
+        users = self.ES.mget(index="rita", doc_type="user", body=body)
         res = [user for user in users["docs"]]
         return res
 
@@ -149,9 +148,9 @@ class UserCruncher(Cruncher):
             query = {
                 "_op_type": "update",
                 "_id": user['id'],
-                "_index": 'lagrosserita',
+                "_index": 'rita',
                 "_type": 'user',
-                "doc": { },
+                "doc": {},
                 "upsert": user}
             yield query
 
