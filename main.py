@@ -59,11 +59,17 @@ class Tasks(object):
     def get(cls):
         '''Return a list of games and users to scrape'''
         NTASKS = 1000
+
+        def rpop(queuename, n):
+            items = []
+            for i in range(n):
+                items += [cls.redis.rpop(queuename)]
+                return items
         with cls.lock:
-            games = cls.redis.rpop('game_queue', 0, NTASKS)
+            games = rpop('game_queue', NTASKS)
             new_games = [g for g, is_old in cls._intersect('games', games) if not is_old]
 
-            users = cls.redis.rpop('user_queue', 0, NTASKS - len(new_games))
+            users = rpop('user_queue', NTASKS - len(new_games))
             users = [u for u, is_old in cls._intersect('users', users)]
 
             return new_games, users
