@@ -26,6 +26,7 @@ class Service(object):
                     return ('404', {})
                 try:
                     res = self.es.get(id=summoner_id, index='rita', doc_type='user')
+                    print "from es"
                     return res['_source']
                 except TransportError:
                     # TODO: send to baptor redis
@@ -97,6 +98,6 @@ class LiteGameCruncher(object):
 if __name__ == "__main__":
     se = Service()
     t_start = time()
-    print se.get_crunched_user('dipl0mate','euw')
+    print se.get_crunched_user('cobiss','euw')
     t_end = time()
     print t_end-t_start

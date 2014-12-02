@@ -8,8 +8,8 @@ class User(dict):
         self['feature'] = defaultdict(float)
         self['aggregate'] = defaultdict(int)
         self['aggregate']['nChamp'] = defaultdict(int)
-        self['games_id_list'] =[]
+        self['games_id_list'] = []
 
     def is_valid(self):
-        return self['feature'].values() == [0]
+        return self['games_id_list'] != []
 
