@@ -1,12 +1,13 @@
 from aggregate_extractor import ChampionExtractor, GameModeExtractor,\
     QueueTypeExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor
 from feature_extractor import ProbaExtractor, RulesExtractor
-from riotwatcher.riotwatcher import RiotWatcher, EUROPE_WEST
+from riotwatcher.riotwatcher import RiotWatcher
 from user import User
-from time import sleep
-
+from time import sleep, time
 from config import ES_NODES
 from elasticsearch import Elasticsearch
+from elasticsearch.exceptions import TransportError
+
 RIOT_KEY_ID= '94b01087-f844-4f6b-8d00-8520cfbf5eec'
 RIOT_KEY_GAME = 'd3928411-a85e-48b2-8686-15cff70e8064'
 
@@ -17,20 +18,22 @@ class Service(object):
     es = Elasticsearch(ES_NODES)
 
     def get_crunched_user(self, summoner_name, region):
-        summoner_id = self.id_watcher.get_summoner(name=summoner_name, region=region)['id']
-        # TODO : handle the case when id is not found
-        try:
-            res = self.es.get(id=summoner_id, index='rita', doc_type='user')
-            print "known"
-            return res['_source']
-        except:
-            # TODO: handle this particular error TransportError(404, u'{"_index":"rita","_type":"user","_id":"36731656","found":false}')
-            # TODO: send to baptor redis
-            game_ids = self._get_game_ids(summoner_id, region)
-            games = self._get_games(game_ids, region)
-            luc = LiteUserCruncher(summoner_id, games)
-            return luc.crunch()
-            pass
+        while True:
+            if self.id_watcher.can_make_request():
+                summoner_id = self.id_watcher.get_summoner(name=summoner_name, region=region)['id']
+                # TODO : handle the case when id is not found
+                try:
+                    res = self.es.get(id=summoner_id, index='rita', doc_type='user')
+                    print "known"
+                    return res['_source']
+                except TransportError:
+                    # TODO: send to baptor redis
+                    game_ids = self._get_game_ids(summoner_id, region)
+                    games = self._get_games(game_ids, region)
+                    luc = LiteUserCruncher(summoner_id, games)
+                    return luc.crunch()
+            else:
+                sleep(0.001)
 
     def _get_game_ids(self, summoner_id, region):
         while True:
@@ -40,17 +43,17 @@ class Service(object):
                 sleep(0.001)
 
     def _get_game(self, game_id, region):
-        while True:
-            if self.game_watcher.can_make_request():
-                return self.game_watcher.get_match(match_id=game_id, region=region, include_timeline=False)
-            else:
-                sleep(0.001)
+        return self.game_watcher.get_match_async(match_id=game_id, region=region, include_timeline=False)
 
     def _get_games(self, game_ids, region):
-        games = []
+        games_grequests = []
         for game_id in game_ids:
-            games.append(self._get_game(game_id, region))
-        return games
+            games_grequests.append(self._get_game(game_id, region))
+            while True:
+                if self.game_watcher.can_make_async_request(len(games_grequests)):
+                    return self.game_watcher.send_async_requests(games_grequests)
+                else:
+                    sleep(0.001)
 
 
 class LiteUserCruncher(object):
@@ -67,6 +70,7 @@ class LiteUserCruncher(object):
         for game in self.games:
             self._process_game(game)
         self._process_features()
+        return self.user
 
     def _process_game(self, game):
         for participant in game["participantIdentities"]:
@@ -87,4 +91,8 @@ class LiteUserCruncher(object):
 
 if __name__ == "__main__":
     se = Service()
-    print se.get_crunched_user('zerbot','euw')
+    t_start = time()
+    for i in range(1,10):
+        print se.get_crunched_user('tronsonator','euw')
+    t_end = time()
+    print t_end-t_start
