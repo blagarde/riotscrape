@@ -4,52 +4,64 @@ from feature_extractor import ProbaExtractor, RulesExtractor
 from riotwatcher.riotwatcher import RiotWatcher, EUROPE_WEST
 from user import User
 from time import sleep
+
+from config import ES_NODES
+from elasticsearch import Elasticsearch
 RIOT_KEY_ID= '94b01087-f844-4f6b-8d00-8520cfbf5eec'
 RIOT_KEY_GAME = 'd3928411-a85e-48b2-8686-15cff70e8064'
 
 
-def assert_api_availability(method):
-    def decorated(self, *args, **kwargs):
+class Service(object):
+    id_watcher = RiotWatcher(RIOT_KEY_ID)
+    game_watcher = RiotWatcher(RIOT_KEY_GAME)
+    es = Elasticsearch(ES_NODES)
+
+    def get_crunched_user(self, summoner_name, region):
+        summoner_id = self.id_watcher.get_summoner(name=summoner_name, region=region)['id']
+        # TODO : handle the case when id is not found
+        try:
+            res = self.es.get(id=summoner_id, index='rita', doc_type='user')
+            print "known"
+            return res['_source']
+        except:
+            # TODO: handle this particular error TransportError(404, u'{"_index":"rita","_type":"user","_id":"36731656","found":false}')
+            # TODO: send to baptor redis
+            game_ids = self._get_game_ids(summoner_id, region)
+            games = self._get_games(game_ids, region)
+            luc = LiteUserCruncher(summoner_id, games)
+            return luc.crunch()
+            pass
+
+    def _get_game_ids(self, summoner_id, region):
         while True:
-            if self.watcher.can_make_request():
-                return method(self, *args, **kwargs)
+            if self.id_watcher.can_make_request():
+                return [game['gameId'] for game in self.id_watcher.get_recent_games(summoner_id=summoner_id, region=region)['games']]
             else:
                 sleep(0.001)
-    return decorated
+
+    def _get_game(self, game_id, region):
+        while True:
+            if self.game_watcher.can_make_request():
+                return self.game_watcher.get_match(match_id=game_id, region=region, include_timeline=False)
+            else:
+                sleep(0.001)
+
+    def _get_games(self, game_ids, region):
+        games = []
+        for game_id in game_ids:
+            games.append(self._get_game(game_id, region))
+        return games
 
 
-class LiveSCruncher(object):
+class LiteUserCruncher(object):
     AE = [QueueTypeExtractor, GameModeExtractor, ChampionExtractor,
           ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor]
     FE = [ProbaExtractor, RulesExtractor]
 
-    def __init__(self, summoner_name, region):
-        self.watcher_id = RiotWatcher(RIOT_KEY_ID)
-        self.watcher_games = RiotWatcher(RIOT_KEY_GAME)
-        self.summoner_name = summoner_name
-        self.region = region
-        self.id = self.get_id()
-        self.games_id = self.get_games_id()
-        self.games = self.get_games()
-        self.user = User(self.id)
-
-    @assert_api_availability
-    def get_id(self):
-        return self.watcher.get_summoner(name=self.summoner_name, region=self.region)['id']
-
-    @assert_api_availability
-    def get_games_id(self):
-        return [game['gameId'] for game in self.watcher.get_recent_games(self.id, region=self.region)['games']]
-
-    @assert_api_availability
-    def get_game(self, id_):
-        return self.watcher.get_match(match_id=id_, region=self.region, include_timeline=False)
-
-    def get_games(self):
-        games = []
-        for id_ in self.games_id:
-            games.append(self.get_game(id_))
-        return games
+    def __init__(self, summoner_id, games):
+        self.summoner_id = summoner_id
+        self.games = games
+        self.user = User(summoner_id)
 
     def crunch(self):
         for game in self.games:
@@ -61,7 +73,7 @@ class LiveSCruncher(object):
             self._process_participant(participant, game)
 
     def _process_participant(self, participant, game):
-        if "player" not in participant or participant["player"]["summonerId"] != self.id:
+        if "player" not in participant or participant["player"]["summonerId"] != self.summoner_id:
             return
         else:
             for f in self.AE:
@@ -74,4 +86,5 @@ class LiveSCruncher(object):
 
 
 if __name__ == "__main__":
-    lsc = LiveSCruncher("dipl0mate", EUROPE_WEST)
+    se = Service()
+    print se.get_crunched_user('zerbot','euw')
