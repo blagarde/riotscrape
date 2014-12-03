@@ -22,8 +22,8 @@ class UserService(object):
             if self.id_watcher.can_make_request():
                 try:
                     summoner_id = self.id_watcher.get_summoner(name=summoner_name, region=region)['id']
-                    res = self.es.get(id=summoner_id, index='rita', doc_type='user')
-                    return '200', res['_source']
+                    user = self.es.get(id=summoner_id, index='rita', doc_type='user')["_source"]
+                    return '200', user
                 except LoLException:
                     return '404', {}
                 except TransportError:
