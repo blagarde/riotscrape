@@ -4,10 +4,10 @@ import logging
 import logging.handlers
 import pandas as pd
 import json
+from config import LOG_FILENAME
 
 
 LINE_REGEX = re.compile(r'^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) (?P<thread>Thread-\d+) (?P<lvl>[^ ]+) +(?P<msg>.*)$')
-LOG_FILENAME = 'riotscrape.log'
 
 
 class RiotLog(object):
