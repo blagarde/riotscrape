@@ -12,7 +12,7 @@ RIOT_KEY_ID = '94b01087-f844-4f6b-8d00-8520cfbf5eec'
 RIOT_KEY_GAME = 'd3928411-a85e-48b2-8686-15cff70e8064'
 
 
-class Service(object):
+class UserService(object):
     id_watcher = RiotWatcher(RIOT_KEY_ID)
     game_watcher = RiotWatcher(RIOT_KEY_GAME)
     es = Elasticsearch(ES_NODES)
@@ -26,12 +26,14 @@ class Service(object):
                     return '404', {}
                 try:
                     res = self.es.get(id=summoner_id, index='rita', doc_type='user')
-                    print "from es"
-                    return res['_source']
+                    return '200', res['_source']
                 except TransportError:
-                    # TODO: send to baptor redis
-                    game_ids = self._get_game_ids(summoner_id, region)
-                    games = self._get_games(game_ids, region)
+                    # TODO: send user to redis queue
+                    try:
+                        game_ids = self._get_game_ids(summoner_id, region)
+                        games = self._get_games(game_ids, region)
+                    except LoLException:
+                        return '404', {}
                     luc = LiteGameCruncher(summoner_id, games)
                     user = luc.crunch()
                     if user.is_valid():
@@ -96,8 +98,8 @@ class LiteGameCruncher(object):
 
 
 if __name__ == "__main__":
-    se = Service()
+    se = UserService()
     t_start = time()
-    print se.get_crunched_user('cobiss', 'euw')
+    print se.get_crunched_user('titi', 'euw')
     t_end = time()
     print t_end-t_start
