@@ -2,7 +2,7 @@ from multiprocessing import Pool
 from aggregate_extractor import ChampionExtractor, GameModeExtractor,\
     QueueTypeExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor
 from elasticsearch.client import Elasticsearch
-from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, RIOT_INDEX, NB_PROCESSES
+from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, RIOT_GAMES_INDEX, RIOT_USERS_INDEX, NB_PROCESSES, USER_DOCTYPE
 from redis import StrictRedis as Buffer
 from user import User
 from elasticsearch import helpers
@@ -33,7 +33,7 @@ class Cruncher(object):
         pass
 
     def crunch(self):
-        chunks = [(x, x + self.chunk_size) for x in xrange(0, len(self.content), self.chunk_size)]
+        chunks = [(x, x+self.chunk_size) for x in xrange(0, len(self.content), self.chunk_size)]
         for a, b in chunks:
             chunk = self.content[a:b]
             conts = self._get_content(chunk)
@@ -79,7 +79,7 @@ class GameCruncher(Cruncher):
 
     def _get_content(self, games_id):
         body = {'ids': games_id}
-        games = self.ES.mget(index=RIOT_INDEX, doc_type=GAME_DOCTYPE, body=body)
+        games = self.ES.mget(index=RIOT_GAMES_INDEX, doc_type=GAME_DOCTYPE, body=body)
         return [game for game in games["docs"]]
 
     def _process_content(self, game):
@@ -110,8 +110,8 @@ class GameCruncher(Cruncher):
             query = {
                 "_op_type": "update",
                 "_id": user['id'],
-                "_index": 'rita',
-                "_type": 'user',
+                "_index": RIOT_USERS_INDEX,
+                "_type": USER_DOCTYPE,
                 "script": "update_agg_data",
                 "params": {"data": json.dumps(user)},
                 "upsert": user,
@@ -129,9 +129,9 @@ class UserCruncher(Cruncher):
         self.content = self.buffer.pipeline().zrange('users', 0, 1000).zremrangebyrank('users', 0, 1000).execute()[0]
         self.USERS_ID = self.buffer.smembers('users_set')
 
-    def _get_content(self, userids):
-        body = {'ids': userids}
-        users = self.ES.mget(index="rita", doc_type="user", body=body)
+    def _get_content(self, user_ids):
+        body = {'ids': user_ids}
+        users = self.ES.mget(index=RIOT_USERS_INDEX, doc_type=USER_DOCTYPE, body=body)
         res = [user for user in users["docs"]]
         return res
 
@@ -143,16 +143,18 @@ class UserCruncher(Cruncher):
             self.USERS[user["id"]] = user
 
     def _build_bulk_request(self, users):
-        # TODO : write the correct query
         for user in users:
             query = {
                 "_op_type": "update",
                 "_id": user['id'],
-                "_index": 'rita',
-                "_type": 'user',
-                "doc": {},
+                "_index": RIOT_USERS_INDEX,
+                "_type": USER_DOCTYPE,
+                "doc": {"feature": user["feature"]},
                 "upsert": user}
             yield query
+
+    def _end_crunching(self):
+        pass
 
 
 def launch_cruncher(cruncher):
