@@ -88,7 +88,7 @@ def init_logging():
     es_logger = logging.getLogger("elasticsearch")
     es_logger.setLevel(logging.WARNING)
     fmt = '%(asctime)s.%(msecs)03d %(threadName)s %(levelname)-8s %(message)s'
-    logging.basicConfig(level=logging.DEBUG, format=fmt, datefmt=DATEFMT, filemode='w')
+    logging.basicConfig(level=logging.INFO, format=fmt, datefmt=DATEFMT, filemode='w')
 
     # Make a rotating file log
     handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=1000000)
