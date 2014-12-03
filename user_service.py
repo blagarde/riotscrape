@@ -22,24 +22,23 @@ class UserService(object):
             if self.id_watcher.can_make_request():
                 try:
                     summoner_id = self.id_watcher.get_summoner(name=summoner_name, region=region)['id']
-                except LoLException:
-                    return '404', {}
-                try:
                     res = self.es.get(id=summoner_id, index='rita', doc_type='user')
                     return '200', res['_source']
+                except LoLException:
+                    return '404', {}
                 except TransportError:
                     # TODO: send user to redis queue
                     try:
                         game_ids = self._get_game_ids(summoner_id, region)
                         games = self._get_games(game_ids, region)
+                        luc = LiteGameCruncher(summoner_id, games)
+                        user = luc.crunch()
+                        if user.is_valid():
+                            return '200', user
+                        else:
+                            return '204', {}
                     except LoLException:
                         return '404', {}
-                    luc = LiteGameCruncher(summoner_id, games)
-                    user = luc.crunch()
-                    if user.is_valid():
-                        return '200', user
-                    else:
-                        return '204', {}
             else:
                 sleep(0.001)
 
@@ -100,6 +99,6 @@ class LiteGameCruncher(object):
 if __name__ == "__main__":
     se = UserService()
     t_start = time()
-    print se.get_crunched_user('titi', 'euw')
+    print se.get_crunched_user('thug', 'na')
     t_end = time()
     print t_end-t_start
