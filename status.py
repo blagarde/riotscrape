@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 from log import LOG_FILENAME, RiotLog
 from datetime import timedelta
+from pprint import pprint
 
 
 TIME_WINDOWS = [1, 5, 15, 60, 60 * 24]  # Minutes
@@ -19,3 +20,7 @@ if __name__ == "__main__":
     print fmt % tuple(["Time window"] + timedeltas)
     print fmt % tuple(["N Tasks"] + [RL.ntasks_since(td) for td in timedeltas])
     print fmt % tuple(["New games ratio"] + [RL.newgames(td) for td in timedeltas])
+
+    ts, dct = RL.last_counts()
+    print "Games per user - as of", ts
+    pprint(dct)

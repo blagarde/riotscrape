@@ -3,6 +3,7 @@ from datetime import datetime
 import logging
 import logging.handlers
 import pandas as pd
+import json
 
 
 LINE_REGEX = re.compile(r'^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) (?P<thread>Thread-\d+) (?P<lvl>[^ ]+) +(?P<msg>.*)$')
@@ -68,6 +69,13 @@ class RiotLog(object):
             return 0
 
         return float(end_new - start_new) / (end_total - start_total)
+
+    def last_counts(self):
+        df = self.as_df(msg="GAME COUNTS")
+        if df.shape[0] == 0:
+            return None
+        last = df.iloc[-1]
+        return last.ts, json.loads(last.msg.split('\t')[-1])
 
 
 def init_logging():

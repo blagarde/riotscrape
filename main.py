@@ -7,6 +7,7 @@ from elasticsearch import Elasticsearch
 from time import sleep
 from redis import StrictRedis
 import logging
+from report import GameCounterThread
 from log import init_logging
 from utils import split_seq, load_as_set
 
@@ -175,6 +176,7 @@ class Scraper(object):
         for t in self.threads:
             t.start()
         LoggingThread().start()
+        GameCounterThread().start()
 
 
 if __name__ == "__main__":
