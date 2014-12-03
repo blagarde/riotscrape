@@ -2,6 +2,7 @@
 from threading import Thread, Lock
 from collections import defaultdict
 from config import KEYS, ES_NODES, GAME_DOCTYPE, RIOT_GAMES_INDEX
+from config import GAME_SET, USER_SET, GAME_QUEUE, USER_QUEUE
 from riotwatcher.riotwatcher import RiotWatcher, EUROPE_WEST, RateLimit
 from elasticsearch import Elasticsearch
 from time import sleep
@@ -72,14 +73,14 @@ class Tasks(object):
         print("**LOAD**\n")
         all_games = load_as_set(ALL_GAMES)
         done_games = load_as_set(DONE_GAMES)
-        cls.redis._bulk_sadd('games', done_games)
+        cls.redis._bulk_sadd(GAME_SET, done_games)
         new_games = all_games.difference(done_games)
         if new_games:
-            cls.redis.lpush('game_queue', *new_games)
+            cls.redis.lpush(GAME_QUEUE, *new_games)
 
         all_users = load_as_set(ALL_USERS)
-        cls.redis._bulk_sadd('users', all_users)
-        cls.redis.lpush('user_queue', *all_users)
+        cls.redis._bulk_sadd(USER_SET, all_users)
+        cls.redis.lpush(USER_QUEUE, *all_users)
         print("**START**\n")
 
     @classmethod
@@ -88,11 +89,11 @@ class Tasks(object):
         NTASKS = 30
 
         with cls.lock:
-            games = cls.redis._bulk_rpop('game_queue', NTASKS)
-            new_games = [g for g, is_old in cls.redis._intersect('games', games) if not is_old]
+            games = cls.redis._bulk_rpop(GAME_QUEUE, NTASKS)
+            new_games = [g for g, is_old in cls.redis._intersect(GAME_SET, games) if not is_old]
 
-            users = cls.redis._bulk_rpop('user_queue', NTASKS - len(new_games))
-            users = [u for u, is_old in cls.redis._intersect('users', users)]
+            users = cls.redis._bulk_rpop(USER_QUEUE, NTASKS - len(new_games))
+            users = [u for u, is_old in cls.redis._intersect(USER_SET, users)]
 
             return new_games, users
 
@@ -100,14 +101,14 @@ class Tasks(object):
     def add(cls, games, users):
         '''Stack some new game IDs and user IDs onto Redis and store the number of games processed'''
         with cls.lock:
-            new_games = [g for g, is_old in cls.redis._intersect('games', games, insert=False) if not is_old]
+            new_games = [g for g, is_old in cls.redis._intersect(GAME_SET, games, insert=False) if not is_old]
             if new_games:
-                cls.redis.lpush('game_queue', *new_games)
+                cls.redis.lpush(GAME_QUEUE, *new_games)
 
             # TODO - add a user to redis if not seen for a long time
-            new_users = [u for u, is_old in cls.redis._intersect('users', users, insert=False) if not is_old]
+            new_users = [u for u, is_old in cls.redis._intersect(USER_SET, users, insert=False) if not is_old]
             if new_users:
-                cls.redis.lpush('user_queue', *new_users)
+                cls.redis.lpush(USER_QUEUE, *new_users)
 
             with open(ALL_USERS, 'a') as ufh:
                 for u in new_users:
