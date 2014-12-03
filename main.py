@@ -1,18 +1,19 @@
 # -*- coding: utf-8 -*-
-import sys
 from threading import Thread, Lock
 from collections import defaultdict
-from itertools import chain
 from config import KEYS, ES_NODES, GAME_DOCTYPE, RIOT_INDEX
 from riotwatcher.riotwatcher import RiotWatcher, EUROPE_WEST, RateLimit
 from elasticsearch import Elasticsearch
 from time import sleep
 from redis import StrictRedis
+import logging
+from log import init_logging
+from utils import split_seq, load_as_set
 
 
 ALL_USERS = '100k_users.txt'  # arbitrary
 ALL_GAMES = 'games.txt'  # all IDs we know about
-DONE_GAMES = 'done_games.txt'  # in rito
+DONE_GAMES = 'gamesrito.txt'  # in rito
 ES = Elasticsearch(ES_NODES)
 
 
@@ -26,81 +27,93 @@ def squelch_errors(method):
             try:
                 return fn(*args)
             except Exception as e:
-                tpl = (args[0].name, fn.__name__, e.__class__.__name__, str(e))
-                sys.stderr.write("%s\tException squelched inside:'%s': %s (%s)\n" % tpl)
-                sys.stderr.flush()
+                tpl = (fn.__name__, e.__class__.__name__, str(e))
+                logging.error("Exception squelched inside:'%s': %s (%s)" % tpl)
                 pass
         return run
     return raising(method)
 
 
+class CustomRedis(StrictRedis):
+    '''Redis pimped up with a few bulk operations
+    WATCH OUT - NOT THREAD SAFE. LOCKING IS YOUR OWN RESPONSIBILITY'''
+
+    def _intersect(self, keyspace, lst, insert=True):
+        '''Check whether each element of 'lst' is in a redis set at 'keyspace'.
+        Optionally insert.'''
+        p = self.pipeline()
+        for i in lst:
+            p.sismember(keyspace, i)
+        res = zip(lst, p.execute())
+        if insert:
+            self._bulk_sadd(keyspace, lst)
+        return res
+
+    def _bulk_sadd(self, keyspace, lst, step=1000):
+        for seq in split_seq(lst, step):
+            self.sadd(keyspace, *seq)
+
+    def _bulk_rpop(self, queue_name, n):
+        '''RPOP 'n' items from 'queue_name'.'''
+        p = self.pipeline()
+        for _ in range(n):
+            p.rpop(queue_name)
+        return [i for i in p.execute() if i is not None]
+
+
 class Tasks(object):
-    redis = StrictRedis()
+    redis = CustomRedis()
     lock = Lock()
-    newness = 0
+    new_games, total_games = 0, 0
 
     @classmethod
     def init(cls):
-
-        def load(filename):
-            return set([l.rstrip() for l in open(filename) if l.strip() != ''])
         print("**LOAD**\n")
-        all_games = load(ALL_GAMES)
-        done_games = load(DONE_GAMES)
-        cls.redis.sadd('games', done_games)
-        cls.redis.lpush('game_queue', all_games.difference(done_games))
+        all_games = load_as_set(ALL_GAMES)
+        done_games = load_as_set(DONE_GAMES)
+        cls.redis._bulk_sadd('games', done_games)
+        new_games = all_games.difference(done_games)
+        if new_games:
+            cls.redis.lpush('game_queue', *new_games)
 
-        all_users = load(ALL_USERS)
-        cls.redis.sadd('users', all_users)
-        cls.redis.lpush('user_queue', all_users)
+        all_users = load_as_set(ALL_USERS)
+        cls.redis._bulk_sadd('users', all_users)
+        cls.redis.lpush('user_queue', *all_users)
         print("**START**\n")
 
     @classmethod
     def get(cls):
         '''Return a list of games and users to scrape'''
-        NTASKS = 1000
+        NTASKS = 30
 
-        def rpop(queuename, n):
-            items = []
-            for i in range(n):
-                items += [cls.redis.rpop(queuename)]
-                return items
         with cls.lock:
-            games = rpop('game_queue', NTASKS)
-            new_games = [g for g, is_old in cls._intersect('games', games) if not is_old]
+            games = cls.redis._bulk_rpop('game_queue', NTASKS)
+            new_games = [g for g, is_old in cls.redis._intersect('games', games) if not is_old]
 
-            users = rpop('user_queue', NTASKS - len(new_games))
-            users = [u for u, is_old in cls._intersect('users', users)]
+            users = cls.redis._bulk_rpop('user_queue', NTASKS - len(new_games))
+            users = [u for u, is_old in cls.redis._intersect('users', users)]
 
             return new_games, users
 
     @classmethod
     def add(cls, games, users):
-        '''Stack some new game IDs and user IDs onto Redis'''
+        '''Stack some new game IDs and user IDs onto Redis and store the number of games processed'''
         with cls.lock:
-            new_games = [g for g, is_old in cls._intersect('games', games, insert=False) if not is_old]
-            ngames = len(games)
-            cls.newness = (float(len(new_games)) / ngames) if ngames > 0 else 0
-            cls.redis.lpush('game_queue', new_games)
+            new_games = [g for g, is_old in cls.redis._intersect('games', games, insert=False) if not is_old]
+            if new_games:
+                cls.redis.lpush('game_queue', *new_games)
 
             # TODO - add a user to redis if not seen for a long time
-            new_users = [u for u, is_old in cls._intersect('users', users, insert=False) if not is_old]
-            cls.redis.lpush('user_queue', new_users)
+            new_users = [u for u, is_old in cls.redis._intersect('users', users, insert=False) if not is_old]
+            if new_users:
+                cls.redis.lpush('user_queue', *new_users)
 
             with open(ALL_USERS, 'a') as ufh:
                 for u in new_users:
                     ufh.write("%s\n" % u)
 
-    @classmethod
-    def _intersect(cls, keyspace, lst, insert=True):
-        '''Check whether each element of 'lst' is in a redis set at 'keyspace'.
-        Optionally insert.'''
-        p = cls.redis.pipeline()
-        for i in lst:
-            p.sismember(keyspace)
-        if insert:
-            p.sadd(keyspace, *lst)
-        return zip(lst, p.execute())
+            cls.total_games += len(games)
+            cls.new_games += len(new_games)
 
 
 class WatcherThread(Thread):
@@ -114,11 +127,13 @@ class WatcherThread(Thread):
         while True:
             self.games, self.users = [], []
             games, users = Tasks.get()
+            logging.debug("Fetched (games/users):\t%s\t%s" % (len(games), len(users)))
             for taskname, lst in [('game', games), ('user', users)]:
                 for arg in lst:
                     while True:
                         if self.watcher.can_make_request():
                             task = getattr(self, 'do_' + taskname)
+                            logging.info("Task:\t%s\t%s" % (taskname, arg))
                             task(arg)
                             break
                         else:
@@ -129,7 +144,6 @@ class WatcherThread(Thread):
     @squelch_errors
     def do_user(self, userid):
         games = self.watcher.get_recent_games(userid, region=EUROPE_WEST)['games']
-        self.reqs['users'] += 1
         for game_dct in games:
             fellow_players = [dct['summonerId'] for dct in game_dct['fellowPlayers']]
             self.users += fellow_players
@@ -139,37 +153,31 @@ class WatcherThread(Thread):
     @squelch_errors
     def do_game(self, gameid):
         dumpme = self.watcher.get_match(gameid, region=EUROPE_WEST, include_timeline=True)
-        self.reqs['games'] += 1
         ES.index(index=RIOT_INDEX, doc_type=GAME_DOCTYPE, id=gameid, body=dumpme)
         participants = [dct['player']['summonerId'] for dct in dumpme['participantIdentities']]
         self.users += participants
 
 
+class LoggingThread(Thread):
+    def run(self):
+        LOG_INTERVAL = 10  # seconds
+        while True:
+            logging.info("total_games/new_games\t%s\t%s" % (Tasks.total_games, Tasks.new_games))
+            sleep(LOG_INTERVAL)
+
+
 class Scraper(object):
     def __init__(self):
         self.threads = [WatcherThread(key) for key in KEYS]
-        self.display()
         Tasks.init()
-        self.display()
 
     def scrape(self):
         for t in self.threads:
             t.start()
-        while True:
-            self.display()
-            sleep(0.1)
-
-    def display(self):
-        fmt = "\r" + '\t'.join(["u%s/g%s (%%s/%%s)" % (i + 1, i + 1) for i in range(len(self.threads))])
-        # out = fmt % tuple(list(range(len(self.threads))) + ['Users', 'Games', 'Index'])
-        # out = fmt %
-        counts = [(t.reqs['users'], t.reqs['games']) for t in self.threads]
-        out = fmt % tuple(chain(*counts))
-        out += '\t' + '\t'.join([str(sum(i)) for i in zip(*counts)])
-        out += '\t' + '\t'.join(map(str, [Tasks.newness])) + '        '
-        sys.stdout.write(out)
+        LoggingThread().start()
 
 
 if __name__ == "__main__":
+    init_logging()
     s = Scraper()
     s.scrape()
