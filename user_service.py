@@ -23,6 +23,9 @@ class UserService(object):
                 try:
                     summoner_id = self.id_watcher.get_summoner(name=summoner_name, region=region)['id']
                     user = self.es.get(id=summoner_id, index='rita', doc_type='user')["_source"]
+                    if not self.features_are_computed(user):
+                        luc = LiteUserCruncher(user)
+                        user = luc.crunch()
                     return '200', user
                 except LoLException:
                     return '404', {}
@@ -31,9 +34,11 @@ class UserService(object):
                     try:
                         game_ids = self._get_game_ids(summoner_id, region)
                         games = self._get_games(game_ids, region)
-                        luc = LiteGameCruncher(summoner_id, games)
-                        user = luc.crunch()
+                        lgc = LiteGameCruncher(summoner_id, games)
+                        user = lgc.crunch()
                         if user.is_valid():
+                            luc = LiteUserCruncher(user)
+                            user = luc.crunch()
                             return '200', user
                         else:
                             return '204', {}
@@ -62,11 +67,31 @@ class UserService(object):
                 else:
                     sleep(0.001)
 
+    @staticmethod
+    def features_are_computed(user):
+        if "feature" in user:
+            return bool(user["feature"])
+        return False
+
+
+class LiteUserCruncher(object):
+    FE = [ProbaExtractor, RulesExtractor]
+
+    def __init__(self, user):
+        self.user = user
+
+    def crunch(self):
+        self._process_content()
+        return self.user
+
+    def _process_content(self):
+        for f in self.FE:
+            self.user = f(self.user).apply()
+
 
 class LiteGameCruncher(object):
     AE = [QueueTypeExtractor, GameModeExtractor, ChampionExtractor,
           ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor]
-    FE = [ProbaExtractor, RulesExtractor]
 
     def __init__(self, summoner_id, games):
         self.summoner_id = summoner_id
@@ -75,11 +100,10 @@ class LiteGameCruncher(object):
 
     def crunch(self):
         for game in self.games:
-            self._process_game(game)
-        self._process_features()
+            self._process_content(game)
         return self.user
 
-    def _process_game(self, game):
+    def _process_content(self, game):
         for participant in game["participantIdentities"]:
             self._process_participant(participant, game)
 
@@ -91,14 +115,10 @@ class LiteGameCruncher(object):
                 self.user = f(self.user, game).apply()
             self.user["games_id_list"].append(int(game['matchId']))
 
-    def _process_features(self):
-        for f in self.FE:
-            self.user = f(self.user).apply()
-
 
 if __name__ == "__main__":
     se = UserService()
     t_start = time()
-    print se.get_crunched_user('thug', 'na')
+    print se.get_crunched_user('dipl0mate', 'euw')
     t_end = time()
     print t_end-t_start
