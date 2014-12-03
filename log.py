@@ -18,6 +18,8 @@ class RiotLog(object):
         with open(path) as fh:
             for line in fh:
                 m = LINE_REGEX.match(line.strip())
+                if m is None:
+                    continue
                 dct = m.groupdict()
                 ts = datetime.strptime(dct['ts'], "%Y-%m-%d %H:%M:%S.%f")
                 dct['ts'] = ts
@@ -83,6 +85,8 @@ def init_logging():
     # Set up a specific logger with our desired output level
     requests_logger = logging.getLogger('requests')
     requests_logger.setLevel(logging.WARNING)
+    es_logger = logging.getLogger("elasticsearch")
+    es_logger.setLevel(logging.WARNING)
     fmt = '%(asctime)s.%(msecs)03d %(threadName)s %(levelname)-8s %(message)s'
     logging.basicConfig(level=logging.DEBUG, format=fmt, datefmt=DATEFMT, filemode='w')
 
