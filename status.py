@@ -1,7 +1,6 @@
 from argparse import ArgumentParser
 from log import LOG_FILENAME, RiotLog
 from datetime import timedelta
-from pprint import pprint
 from redis import StrictRedis
 from config import GAME_SET, USER_SET, GAME_QUEUE, USER_QUEUE
 
@@ -40,4 +39,5 @@ if __name__ == "__main__":
         raise SystemExit("No Games per user request available")
     ts, dct = res
     print "\nGames per user - as of", ts
-    pprint(dct)
+    for k, v in dct.items():
+        print "%s games:\t%s users" % (k, v)
