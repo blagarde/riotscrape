@@ -34,9 +34,11 @@ class UserService(object):
                     try:
                         game_ids = self._get_game_ids(summoner_id, region)
                         games = self._get_games(game_ids, region)
-                        luc = LiteGameCruncher(summoner_id, games)
-                        user = luc.crunch()
+                        lgc = LiteGameCruncher(summoner_id, games)
+                        user = lgc.crunch()
                         if user.is_valid():
+                            luc = LiteUserCruncher(user)
+                            user = luc.crunch()
                             return '200', user
                         else:
                             return '204', {}
