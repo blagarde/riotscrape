@@ -32,9 +32,12 @@ if __name__ == "__main__":
     print fmt % tuple(["N Tasks"] + [RL.ntasks_since(td) for td in timedeltas])
     print fmt % tuple(["New games ratio"] + [RL.newgames(td) for td in timedeltas])
 
-    ts, dct = RL.last_counts()
-    print "\nGames per user - as of", ts
-    pprint(dct)
-
     rr = RedisReport()
     rr.display()
+
+    res = RL.last_counts()
+    if res is None:
+        raise SystemExit("No Games per user request available")
+    ts, dct = res
+    print "\nGames per user - as of", ts
+    pprint(dct)
