@@ -16,7 +16,6 @@ from utils import split_seq, load_as_set
 ALL_USERS = '100k_users.txt'  # arbitrary
 ALL_GAMES = 'games.txt'  # all IDs we know about
 DONE_GAMES = 'gamesrito.txt'  # in rito
-ES = Elasticsearch(ES_NODES)
 
 
 def squelch_errors(method):
@@ -123,6 +122,7 @@ class WatcherThread(Thread):
     def __init__(self, key, *args, **kwargs):
         self.reqs = defaultdict(int)
         self.watcher = RiotWatcher(key, limits=(RateLimit(10, 10), RateLimit(500, 600)))
+        self.ES = Elasticsearch(ES_NODES)
         super(WatcherThread, self).__init__(*args, **kwargs)
 
     def run(self):
@@ -155,7 +155,7 @@ class WatcherThread(Thread):
     @squelch_errors
     def do_game(self, gameid):
         dumpme = self.watcher.get_match(gameid, region=EUROPE_WEST, include_timeline=True)
-        ES.index(index=RIOT_GAMES_INDEX, doc_type=GAME_DOCTYPE, id=gameid, body=dumpme)
+        self.ES.index(index=RIOT_GAMES_INDEX, doc_type=GAME_DOCTYPE, id=gameid, body=dumpme)
         participants = [dct['player']['summonerId'] for dct in dumpme['participantIdentities']]
         self.users += participants
 
