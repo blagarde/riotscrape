@@ -85,7 +85,8 @@ class ThreadingTests(TestCase):
         wt2.join()
 
         # 1. check that the task counts are accurate
-        self.assertEquals(Tasks.total_games, )
+        self.assertEquals(Tasks.total_games, len(TEST_MANY_GAMES))
+        self.assertEquals(Tasks.new_games, len(TEST_MANY_GAMES))
 
 if __name__ == "__main__":
     unittest.main()
