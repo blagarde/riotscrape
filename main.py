@@ -10,7 +10,8 @@ from redis import StrictRedis
 import logging
 from report import GameCounterThread
 from log import init_logging
-from utils import split_seq, load_as_set
+from utils import split_seq, load_as_set, squelch_errors
+from argparse import ArgumentParser
 
 
 ALL_USERS = '100k_users.txt'  # arbitrary
@@ -18,26 +19,23 @@ ALL_GAMES = 'games.txt'  # all IDs we know about
 DONE_GAMES = 'gamesrito.txt'  # in rito
 
 
-def squelch_errors(method):
-    '''
-    Decorator to squelch most errors.
-    Just output them to stderr
-    '''
-    def raising(fn):
-        def run(*args):
-            try:
-                return fn(*args)
-            except Exception as e:
-                tpl = (fn.__name__, e.__class__.__name__, str(e))
-                logging.error("Exception squelched inside:'%s': %s (%s)" % tpl)
-                pass
-        return run
-    return raising(method)
-
-
 class CustomRedis(StrictRedis):
     '''Redis pimped up with a few bulk operations
     WATCH OUT - NOT THREAD SAFE. LOCKING IS YOUR OWN RESPONSIBILITY'''
+
+    def init(self):
+        print("**LOAD**\n")
+        all_games = load_as_set(ALL_GAMES)
+        done_games = load_as_set(DONE_GAMES)
+        self._bulk_sadd(GAME_SET, done_games)
+        new_games = all_games.difference(done_games)
+        if new_games:
+            self.lpush(GAME_QUEUE, *new_games)
+
+        all_users = load_as_set(ALL_USERS)
+        self._bulk_sadd(USER_SET, all_users)
+        self.lpush(USER_QUEUE, *all_users)
+        print("**START**\n")
 
     def _intersect(self, keyspace, lst, insert=True):
         '''Check whether each element of 'lst' is in a redis set at 'keyspace'.
@@ -50,9 +48,10 @@ class CustomRedis(StrictRedis):
             self._bulk_sadd(keyspace, lst)
         return res
 
-    def _bulk_sadd(self, keyspace, lst, step=1000):
+    def _bulk_sadd(self, set_name, lst, step=1000):
+        '''SADD multiple items from 'lst' to 'set_name'.'''
         for seq in split_seq(lst, step):
-            self.sadd(keyspace, *seq)
+            self.sadd(set_name, *seq)
 
     def _bulk_rpop(self, queue_name, n):
         '''RPOP 'n' items from 'queue_name'.'''
@@ -66,21 +65,6 @@ class Tasks(object):
     redis = CustomRedis()
     lock = Lock()
     new_games, total_games = 0, 0
-
-    @classmethod
-    def init(cls):
-        print("**LOAD**\n")
-        all_games = load_as_set(ALL_GAMES)
-        done_games = load_as_set(DONE_GAMES)
-        cls.redis._bulk_sadd(GAME_SET, done_games)
-        new_games = all_games.difference(done_games)
-        if new_games:
-            cls.redis.lpush(GAME_QUEUE, *new_games)
-
-        all_users = load_as_set(ALL_USERS)
-        cls.redis._bulk_sadd(USER_SET, all_users)
-        cls.redis.lpush(USER_QUEUE, *all_users)
-        print("**START**\n")
 
     @classmethod
     def get(cls):
@@ -126,6 +110,7 @@ class WatcherThread(Thread):
         super(WatcherThread, self).__init__(*args, **kwargs)
 
     def run(self):
+        '''Main loop. Get tasks and execute them. (1 task == 1 request).'''
         while True:
             self.games, self.users = [], []
             games, users = Tasks.get()
@@ -171,7 +156,6 @@ class LoggingThread(Thread):
 class Scraper(object):
     def __init__(self):
         self.threads = [WatcherThread(key) for key in KEYS]
-        Tasks.init()
 
     def scrape(self):
         for t in self.threads:
@@ -181,6 +165,13 @@ class Scraper(object):
 
 
 if __name__ == "__main__":
+    ap = ArgumentParser(description="Scrape games from the Riot API")
+    ap.add_argument('-i', '--init', action="store_true", help="Initialize Redis stacks with the contents of game and user files")
+    args = ap.parse_args()
+
     init_logging()
+    if args.init:
+        Tasks.redis.init()
+
     s = Scraper()
     s.scrape()
