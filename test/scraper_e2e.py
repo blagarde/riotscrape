@@ -10,7 +10,6 @@ from elasticsearch import Elasticsearch
 
 class ThreadingTests(TestCase):
     def setUp(self):
-        self.wt = WatcherThread(TEST_KEY, cycles=1)
         self.es = Elasticsearch({"host": "localhost", "port": "8000"})
         for key in GAME_QUEUE, USER_QUEUE, GAME_SET, USER_SET:
             print(key)
@@ -21,7 +20,8 @@ class ThreadingTests(TestCase):
 
     def test_games_make_it_to_elasticsearch_in_reasonable_time(self):
         Tasks.add(TEST_GAMES, TEST_USERS)
-        self.wt.start()
+        wt = WatcherThread(TEST_KEY, cycles=1)
+        wt.start()
         REASONABLE_TIME = 10  # seconds
         with timeout(REASONABLE_TIME):
             while True:
@@ -32,7 +32,7 @@ class ThreadingTests(TestCase):
                 except:
                     pass
                 sleep(0.1)
-        self.wt.join()
+        wt.join()
 
         # 1. check that the game queue is now empty
         ONE_SHITLOAD = 10000
@@ -48,8 +48,8 @@ class ThreadingTests(TestCase):
 
     def test_games_and_users_properly_queued(self):
         Tasks.add(TEST_GAMES, TEST_USERS)
-        self.wt._remaining_cycles = 2
-        self.wt.run()
+        wt = WatcherThread(TEST_KEY, cycles=2)
+        wt.run()
 
         # 1. check that the game queue is not empty
         self.assertGreater(Tasks.redis.llen(GAME_QUEUE), 0)
@@ -69,10 +69,23 @@ class ThreadingTests(TestCase):
         # 5. check that no users got processed
         self.assertNotEqual(Tasks.redis.scard(USER_SET), 0)
 
-        # 6. Check that task counts are accurate
+        # 6. check that task counts are accurate
         self.assertEquals(Tasks.total_games, len(TEST_GAMES))
         self.assertEquals(Tasks.new_games, len(TEST_GAMES))
 
+    def test_multi_thread(self):
+        Tasks.add(TEST_MANY_GAMES, TEST_USERS)
+        wt1 = WatcherThread(TEST_KEY, cycles=1)
+        wt2 = WatcherThread(TEST_KEY2, cycles=1)
+
+        wt1.start()
+        wt2.start()
+
+        wt1.join()
+        wt2.join()
+
+        # 1. check that the task counts are accurate
+        self.assertEquals(Tasks.total_games, )
 
 if __name__ == "__main__":
     unittest.main()
