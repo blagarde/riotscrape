@@ -105,6 +105,7 @@ class Tasks(object):
 class WatcherThread(Thread):
 
     def __init__(self, key, *args, **kwargs):
+        self._remaining_cycles = kwargs.pop("cycles", None)  # 'None' means "loop forever"
         self.reqs = defaultdict(int)
         self.watcher = RiotWatcher(key, limits=(RateLimit(10, 10), RateLimit(500, 600)))
         self.ES = Elasticsearch(ES_NODES)
@@ -126,8 +127,17 @@ class WatcherThread(Thread):
                             break
                         else:
                             sleep(0.001)
+            if self.my_work_here_is_done:
+                break
             Tasks.add(set(self.games), set(self.users + users))
             sleep(0.001)
+
+    @property
+    def my_work_here_is_done(self):
+        if self._remaining_cycles is None:
+            return False
+        self._remaining_cycles -= 1
+        return (self._remaining_cycles == 0)
 
     @squelch_errors
     def do_user(self, userid):
