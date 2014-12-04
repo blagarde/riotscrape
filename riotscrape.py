@@ -136,7 +136,8 @@ class WatcherThread(Thread):
             fellow_players = [dct['summonerId'] for dct in game_dct['fellowPlayers']]
             self.users += fellow_players
             gameid = game_dct['gameId']
-            self.games += [gameid]
+            if self.is_ranked(game_dct):
+                self.games += [gameid]
 
     @squelch_errors
     def do_game(self, gameid):
@@ -144,6 +145,15 @@ class WatcherThread(Thread):
         self.ES.index(index=RIOT_GAMES_INDEX, doc_type=GAME_DOCTYPE, id=gameid, body=dumpme)
         participants = [dct['player']['summonerId'] for dct in dumpme['participantIdentities']]
         self.users += participants
+
+    @staticmethod
+    def is_ranked(game_dct):
+        try:
+            game_dct['subType'][:6] == "RANKED"
+            return True
+        except KeyError:
+            logging.error("There be trouble.")
+            return False
 
 
 class LoggingThread(Thread):
