@@ -1,4 +1,0 @@
-scard users
-llen user_queue
-scard games
-llen game_queue
