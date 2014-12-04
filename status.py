@@ -39,5 +39,5 @@ if __name__ == "__main__":
         raise SystemExit("No Games per user request available")
     ts, dct = res
     print "\nGames per user - as of", ts
-    for k in sorted(dct):
-        print "%s games:\t%s users" % (k, dct[k])
+    for k in sorted(map(int, dct)):
+        print "%s games:\t%s users" % (k, dct[str(k)])
