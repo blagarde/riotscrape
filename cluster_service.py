@@ -12,8 +12,10 @@ class ClusterService(object):
 
     def get_user_cluster(self, user):
         u_v = self.translator.translate(user)
+        print u_v
         if len(u_v) > 0:
             u_s = self.scaler.transform(u_v)
+            print u_s
             label = int(self.clf.get_label(u_s)[0])
             return label
         else:

@@ -16,10 +16,7 @@ def get_user_data(region,summonername):
     if res[0] == '200':
         ret = dict()
         ret["user"] = res[1]
-        arg = dict()
-        arg["_source"] = res[1]
-        ret["label"] = cs.get_user_cluster(arg)
-        print ret
+        ret["label"] = cs.get_user_cluster(res[1])
         retjs = json.dumps(ret, separators=(',',':'))
         return retjs
     else:

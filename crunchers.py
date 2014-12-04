@@ -5,6 +5,7 @@ from elasticsearch.client import Elasticsearch
 from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, RIOT_GAMES_INDEX, RIOT_USERS_INDEX, NB_PROCESSES, USER_DOCTYPE
 from redis import StrictRedis as Buffer
 from user import User
+from cluster_service import ClusterService
 from elasticsearch import helpers
 from feature_extractor import ProbaExtractor, RulesExtractor
 from abc import abstractmethod
@@ -123,6 +124,7 @@ class UserCruncher(Cruncher):
     def __init__(self):
         Cruncher.__init__(self)
         self.FE = [ProbaExtractor, RulesExtractor]
+        self.cs = ClusterService("labelling_files/scaler_9g", "labelling_files/clf_9g")
 
     def _init_ids(self):
         self.content = self.buffer.pipeline().zrange('users', 0, 1000).zremrangebyrank('users', 0, 1000).execute()[0]
@@ -138,17 +140,22 @@ class UserCruncher(Cruncher):
         if user["found"]:
             user = user["_source"]
             for f in self.FE:
-                user = f(user["_source"]).apply()
+                user = f(user).apply()
             self.USERS[user["id"]] = user
 
     def _build_bulk_request(self, users):
         for user in users:
+            doc = dict()
+            doc["feature"] = user["feature"]
+            label = self.cs.get_user_cluster(user)
+            if (label > -1):
+                doc["cluster"] = label
             query = {
                 "_op_type": "update",
                 "_id": user['id'],
                 "_index": RIOT_USERS_INDEX,
                 "_type": USER_DOCTYPE,
-                "doc": {"feature": user["feature"]},
+                "doc": doc,
                 "upsert": user}
             yield query
 
