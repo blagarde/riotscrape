@@ -29,6 +29,7 @@ class RiotLog(object):
         self.start, self.end = min(timestamps), max(timestamps)
 
     def filter(self, **params):
+        '''Generator that yields rows from the log, as dicts'''
         KEYS = "ts thread lvl msg".split(' ')
         assert all([k in KEYS for k in params.keys()])
         for line_dct in self.lines:
@@ -40,12 +41,12 @@ class RiotLog(object):
         filtered = self.filter(**params)
         return pd.DataFrame(filtered)
 
-    def ntasks_since(self, td):
-        '''Return the numer of tasks done in the log's last 'td' timedelta, None if the window starts before the log'''
+    def ntasks_since(self, filter_msg, td):
+        '''Return the number of tasks done in the log's last 'td' timedelta, None if the window starts before the log'''
         window_start = self.end - td
         if window_start < self.start:
             return None
-        df = self.as_df(msg="Task")
+        df = self.as_df(msg=filter_msg)
         filtered = df[df.ts > window_start]
         return filtered.shape[0]
 
