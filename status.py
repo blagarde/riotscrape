@@ -29,6 +29,7 @@ if __name__ == "__main__":
     fmt = "%18s" * (len(args.time) + 1)
     print fmt % tuple(["Time window"] + timedeltas)
     print fmt % tuple(["N Tasks"] + [RL.ntasks_since(td) for td in timedeltas])
+    print fmt % tuple(["Tasks/sec"] + [float(RL.ntasks_since(td)) / td.total_seconds() for td in timedeltas])
     print fmt % tuple(["New games ratio"] + [RL.newgames(td) for td in timedeltas])
 
     rr = RedisReport()
