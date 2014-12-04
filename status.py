@@ -28,8 +28,10 @@ if __name__ == "__main__":
     timedeltas = [timedelta(0, m * 60) for m in args.time]
     fmt = "%18s" * (len(args.time) + 1)
     print fmt % tuple(["Time window"] + timedeltas)
-    print fmt % tuple(["N Tasks"] + [RL.ntasks_since(td) for td in timedeltas])
-    print fmt % tuple(["Tasks/sec"] + [float(RL.ntasks_since(td)) / td.total_seconds() for td in timedeltas])
+    ntasks = [RL.ntasks_since(td) for td in timedeltas]
+    print fmt % tuple(["N Tasks"] + ntasks)
+    f = lambda x: float(x) if x is not None else 0
+    print fmt % tuple(["Tasks/sec"] + [f(n) / td.total_seconds() for n, td in zip(ntasks, timedeltas)])
     print fmt % tuple(["New games ratio"] + [RL.newgames(td) for td in timedeltas])
 
     rr = RedisReport()
