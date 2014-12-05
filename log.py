@@ -92,7 +92,7 @@ def init_logging():
     logging.basicConfig(level=logging.INFO, format=fmt, datefmt=DATEFMT, filemode='w')
 
     # Make a rotating file log
-    handler = logging.FileHandler(LOG_FILENAME)
+    handler = logging.TimedRotatingFileHandler(LOG_FILENAME, when="W0-W6", backupCount=6)
     formatter = logging.Formatter(fmt, datefmt=DATEFMT)
     handler.setFormatter(formatter)
     root_logger = logging.getLogger('')
