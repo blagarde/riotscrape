@@ -18,34 +18,40 @@ class UserService(object):
     es = Elasticsearch(ES_NODES)
 
     def get_crunched_user(self, summoner_name, region):
-        while True:
-            if self.id_watcher.can_make_request():
-                try:
-                    summoner_id = self.id_watcher.get_summoner(name=summoner_name, region=region)['id']
-                    user = self.es.get(id=summoner_id, index='rita', doc_type='user')["_source"]
-                    if not self.features_are_computed(user):
-                        luc = LiteUserCruncher(user)
-                        user = luc.crunch()
-                    return '200', user
-                except LoLException:
-                    return '404', {}
-                except TransportError:
-                    # TODO: send user to redis queue
-                    try:
-                        game_ids = self._get_game_ids(summoner_id, region)
-                        games = self._get_games(game_ids, region)
-                        lgc = LiteGameCruncher(summoner_id, games)
-                        user = lgc.crunch()
-                        if user.is_valid():
-                            luc = LiteUserCruncher(user)
-                            user = luc.crunch()
-                            return '200', user
-                        else:
-                            return '204', {}
-                    except LoLException:
-                        return '404', {}
-            else:
-                sleep(0.001)
+        while not self.id_watcher.can_make_request():
+            sleep(0.001)
+        summoner_id = self._get_id_from_riot(summoner_name, region)
+        if summoner_id == 'NOT_FOUND':
+            return '404', {}
+        try:
+            return self._get_user_from_es(summoner_id)
+        except TransportError:
+            return self._get_user_from_riot(summoner_id, region)
+
+    def _get_id_from_riot(self,summoner_name,region):
+        try:
+            return self.id_watcher.get_summoner(name=summoner_name, region=region)['id']
+        except LoLException:
+            return 'ID_NOT_FOUND'
+
+    def _get_user_from_es(self, summoner_id):
+        user = self.es.get(id=summoner_id, index='rita', doc_type='user')["_source"]
+        if not self.features_are_computed(user):
+            luc = LiteUserCruncher(user)
+            return '200', luc.crunch()
+        return '200', user
+
+    def _get_user_from_riot(self, summoner_id, region):
+        game_ids = self._get_game_ids(summoner_id, region)
+        games = self._get_games(game_ids, region)
+        lgc = LiteGameCruncher(summoner_id, games)
+        user = lgc.crunch()
+        if user.is_valid():
+            luc = LiteUserCruncher(user)
+            user = luc.crunch()
+            return '200', user
+        else:
+            return '204', {}
 
     def _get_game_ids(self, summoner_id, region):
         while True:
