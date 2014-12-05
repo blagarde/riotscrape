@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from argparse import ArgumentParser
 from log import LOG_FILENAME, RiotLog
 from datetime import timedelta
