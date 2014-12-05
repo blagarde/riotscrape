@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from threading import Thread, Lock
 from collections import defaultdict
-from config import KEYS, ES_NODES, GAME_DOCTYPE, RIOT_GAMES_INDEX
+from config import KEYS, ES_NODES, GAME_DOCTYPE, RIOT_GAMES_INDEX, TO_CRUNCHER
 from config import REDIS_PARAM, GAME_SET, USER_SET, GAME_QUEUE, USER_QUEUE
 from riotwatcher.riotwatcher import RiotWatcher, EUROPE_WEST, RateLimit
 from elasticsearch import Elasticsearch
@@ -154,6 +154,7 @@ class WatcherThread(Thread):
     def do_game(self, gameid):
         dumpme = self.watcher.get_match(gameid, region=EUROPE_WEST, include_timeline=True)
         self.ES.index(index=RIOT_GAMES_INDEX, doc_type=GAME_DOCTYPE, id=gameid, body=dumpme)
+        Tasks.redis.zadd(TO_CRUNCHER, 0, gameid)
         participants = [dct['player']['summonerId'] for dct in dumpme['participantIdentities']]
         self.users += participants
 
