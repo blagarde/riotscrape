@@ -3,7 +3,7 @@
 from threading import Thread, Lock
 from collections import defaultdict
 from config import KEYS, ES_NODES, GAME_DOCTYPE, RIOT_GAMES_INDEX
-from config import GAME_SET, USER_SET, GAME_QUEUE, USER_QUEUE
+from config import REDIS_PARAM, GAME_SET, USER_SET, GAME_QUEUE, USER_QUEUE
 from riotwatcher.riotwatcher import RiotWatcher, EUROPE_WEST, RateLimit
 from elasticsearch import Elasticsearch
 from time import sleep
@@ -63,7 +63,7 @@ class CustomRedis(StrictRedis):
 
 
 class Tasks(object):
-    redis = CustomRedis()
+    redis = CustomRedis(**REDIS_PARAM)
     lock = Lock()
     new_games, total_games = 0, 0
 
@@ -127,9 +127,10 @@ class WatcherThread(Thread):
                             break
                         else:
                             sleep(0.001)
+            # Report game and user IDs seen during this cycle
+            Tasks.add(set(self.games), set(self.users))
             if self.my_work_here_is_done:
                 break
-            Tasks.add(set(self.games), set(self.users + users))
             sleep(0.001)
 
     @property
@@ -159,9 +160,8 @@ class WatcherThread(Thread):
     @staticmethod
     def is_ranked(game_dct):
         try:
-            game_dct['subType'][:6] == "RANKED"
-            return True
-        except KeyError:
+            return (game_dct['subType'][:6] == "RANKED")
+        except:
             logging.error("There be trouble.")
             return False
 

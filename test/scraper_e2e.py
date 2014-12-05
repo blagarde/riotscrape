@@ -1,33 +1,51 @@
+import os
 from riotscrape import WatcherThread, Tasks
 from unittest import TestCase
-from config import TEST_KEY
+import unittest
+from config import TEST_KEY, TEST_KEY2, ES_NODES, GAME_DOCTYPE
 from config import GAME_QUEUE, USER_QUEUE, GAME_SET, USER_SET
 from time import sleep
-from redis import StrictRedis
 from interruptingcow import timeout
 from elasticsearch import Elasticsearch
 
 
+HERE = os.path.abspath(os.path.dirname(__file__))
+TEST_GAME_FILE = os.path.join(HERE, '53rankedgames.txt')
+
+TEST_GAMES = [l.rstrip() for l in open(TEST_GAME_FILE).readlines()[:10] if l.rstrip() != '\n']
+TEST_MANY_GAMES = [l.rstrip() for l in open(TEST_GAME_FILE).readlines()[:40] if l.rstrip() != '\n']
+TEST_USERS = ['31868', '21496958', '37877378', '44118661', '29057304']
+
+
+TEST_ES_INDEX = 'scrapertest'
+
+
 class ThreadingTests(TestCase):
     def setUp(self):
-        self.es = Elasticsearch({"host": "localhost", "port": "8000"})
+        self.es = Elasticsearch(ES_NODES)
+        print GAME_QUEUE, Tasks.redis.llen(GAME_QUEUE)
+        print USER_QUEUE, Tasks.redis.llen(USER_QUEUE)
+        print GAME_SET, Tasks.redis.scard(GAME_SET)
+        print USER_SET, Tasks.redis.scard(USER_SET)
+        raw_input("About to delete the above-listed Redis keys. CTRL-C to abort, <enter> to continue.")
         for key in GAME_QUEUE, USER_QUEUE, GAME_SET, USER_SET:
-            print(key)
-        raw_input("About to delete the above-listed Redis keys. CTRL-C to abort.")
-        for key in GAME_QUEUE, USER_QUEUE, GAME_SET, USER_SET:
-            Tasks.delete(key)
-        sleep(10)  # Ensure API available
+            Tasks.redis.delete(key)
+        self.es.delete_by_query(index=TEST_ES_INDEX, doc_type=GAME_DOCTYPE, body={"query": {"match_all": {}}})
+        print "Be patient (10s) - making sure API is available"
+        sleep(10)
+        print "Ready!"
 
     def test_games_make_it_to_elasticsearch_in_reasonable_time(self):
-        Tasks.add(TEST_GAMES, TEST_USERS)
+        Tasks.add(TEST_GAMES, [])
         wt = WatcherThread(TEST_KEY, cycles=1)
         wt.start()
-        REASONABLE_TIME = 10  # seconds
+        REASONABLE_TIME = 20  # seconds
         with timeout(REASONABLE_TIME):
             while True:
                 try:
-                    self.es.mget(index='test', doc_type='game', body={'ids': TEST_GAMES})
-                    # TODO - assert that the all items made it to ES 
+                    # TODO - assert that the all items made it to ES
+                    docs = self.es.mget(index=TEST_ES_INDEX, doc_type=GAME_DOCTYPE, body={'ids': TEST_GAMES})['docs']
+                    assert all([d['found'] for d in docs])
                     break
                 except:
                     pass
@@ -45,33 +63,29 @@ class ThreadingTests(TestCase):
         items, is_old = zip(*Tasks.redis._intersect(GAME_SET, TEST_GAMES, insert=False))
         self.assertTrue(all(is_old))
 
-
     def test_games_and_users_properly_queued(self):
+        # Init with 10 games and 5 users
         Tasks.add(TEST_GAMES, TEST_USERS)
-        wt = WatcherThread(TEST_KEY, cycles=2)
+        wt = WatcherThread(TEST_KEY, cycles=1)
         wt.run()
 
-        # 1. check that the game queue is not empty
-        self.assertGreater(Tasks.redis.llen(GAME_QUEUE), 0)
-
-        # 2. check that none of the test games are now currently queued
+        # 1. check that none of the test games are now currently queued
         ONE_SHITLOAD = 10000
         newly_queued_games = Tasks.redis._bulk_rpop(GAME_QUEUE, ONE_SHITLOAD)
-        self.assertEquals(len(set(newly_queued_games) | (TEST_GAMES)), 0)
+        self.assertEquals(len(set(newly_queued_games) & set(TEST_GAMES)), 0)
 
-        # 3. check that seeded TEST_GAMEs are still in GAME_SET after the second iteration
+        # 2. check that seeded TEST_GAMEs are still in GAME_SET after the second iteration
         items, is_old = zip(*Tasks.redis._intersect(GAME_SET, TEST_GAMES, insert=False))
         self.assertTrue(all(is_old))
 
-        # 4. check that some new users got queued
-        self.assertNotEqual(Tasks.redis.llen(USER_QUEUE), 0)
-
-        # 5. check that no users got processed
+        # 3. check that some new users got added
         self.assertNotEqual(Tasks.redis.scard(USER_SET), 0)
 
-        # 6. check that task counts are accurate
-        self.assertEquals(Tasks.total_games, len(TEST_GAMES))
-        self.assertEquals(Tasks.new_games, len(TEST_GAMES))
+        # 4. check that some new games got added
+        self.assertNotEqual(Tasks.redis.scard(GAME_SET), 0)
+
+        # 5. check that game counts are accurate
+        self.assertEquals(Tasks.new_games, len(TEST_GAMES) + len(newly_queued_games))
 
     def test_multi_thread(self):
         Tasks.add(TEST_MANY_GAMES, TEST_USERS)
@@ -84,9 +98,8 @@ class ThreadingTests(TestCase):
         wt1.join()
         wt2.join()
 
-        # 1. check that the task counts are accurate
-        self.assertEquals(Tasks.total_games, len(TEST_MANY_GAMES))
-        self.assertEquals(Tasks.new_games, len(TEST_MANY_GAMES))
+        # 1. check that the game counts are accurate
+        self.assertEquals(Tasks.new_games, len(TEST_MANY_GAMES) + Tasks.redis.llen(GAME_QUEUE))
 
 if __name__ == "__main__":
     unittest.main()
