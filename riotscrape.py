@@ -170,10 +170,10 @@ class WatcherThread(Thread):
     def do_game(self, gameid):
         dumpme = self.watcher.get_match(gameid, region=EUROPE_WEST, include_timeline=True)
         self.ES.index(index=RIOT_GAMES_INDEX, doc_type=GAME_DOCTYPE, id=gameid, body=dumpme)
-        Tasks.redis.zadd(TO_CRUNCHER, 0, gameid)
         # TODO - assert that insert into ES and into redis worked
         participants = [dct['player']['summonerId'] for dct in dumpme['participantIdentities']]
         self.users += participants
+        Tasks.redis.lpush(TO_CRUNCHER, gameid)
 
     @staticmethod
     def is_ranked(game_dct):
