@@ -13,6 +13,7 @@ from report import GameCounterThread
 from log import init_logging
 from utils import split_seq, load_as_set
 from argparse import ArgumentParser
+import json
 
 
 ALL_USERS = '100k_users.txt'  # arbitrary
@@ -173,7 +174,7 @@ class WatcherThread(Thread):
         # TODO - assert that insert into ES and into redis worked
         participants = [dct['player']['summonerId'] for dct in dumpme['participantIdentities']]
         self.users += participants
-        Tasks.redis.lpush(TO_CRUNCHER, gameid)
+        Tasks.redis.lpush(TO_CRUNCHER, json.dumps(dumpme))
 
     @staticmethod
     def is_ranked(game_dct):
