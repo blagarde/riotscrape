@@ -11,7 +11,7 @@ from redis import StrictRedis
 import logging
 from report import GameCounterThread
 from log import init_logging
-from utils import split_seq, load_as_set, squelch_errors
+from utils import split_seq, load_as_set
 from argparse import ArgumentParser
 
 
@@ -82,9 +82,10 @@ class Tasks(object):
             return new_games, users
 
     @classmethod
-    def add(cls, games, users):
+    def add(cls, games, users, errors=[]):
         '''Stack some new game IDs and user IDs onto Redis and store the number of games processed'''
         with cls.lock:
+            cls._handle_errors(errors)
             new_games = [g for g, is_old in cls.redis._intersect(GAME_SET, games, insert=False) if not is_old]
             if new_games:
                 cls.redis.lpush(GAME_QUEUE, *new_games)
@@ -101,6 +102,17 @@ class Tasks(object):
             cls.total_games += len(games)
             cls.new_games += len(new_games)
 
+    @classmethod
+    def _handle_errors(cls, errors):
+        '''Place failed game (resp. user) IDs at the start of the queue so they get redone first'''
+        error_games = [gid for taskname, gid in errors if taskname == 'game']
+        cls.redis.srem(GAME_SET, *error_games)
+        cls.redis.rpush(GAME_QUEUE, *error_games)
+
+        error_users = [uid for taskname, uid in errors if taskname == 'user']
+        cls.redis.srem(USER_SET, *error_users)
+        cls.redis.rpush(USER_QUEUE, *error_users)
+
 
 class WatcherThread(Thread):
 
@@ -115,20 +127,26 @@ class WatcherThread(Thread):
         '''Main loop. Get tasks and execute them. (1 task == 1 request).'''
         while True:
             self.games, self.users = [], []
+            errors = []
             games, users = Tasks.get()
             logging.debug("Fetched (games/users):\t%s\t%s" % (len(games), len(users)))
             for taskname, lst in [('game', games), ('user', users)]:
                 for arg in lst:
-                    while True:
-                        if self.watcher.can_make_request():
-                            task = getattr(self, 'do_' + taskname)
-                            logging.info("Task:\t%s\t%s" % (taskname, arg))
-                            task(arg)
-                            break
-                        else:
-                            sleep(0.001)
+                    try:
+                        while True:
+                            if self.watcher.can_make_request():
+                                task = getattr(self, 'do_' + taskname)
+                                logging.info("Task:\t%s\t%s" % (taskname, arg))
+                                task(arg)
+                                break
+                            else:
+                                sleep(0.001)
+                    except:
+                        logging.error("Failed to do %s: %s" % (taskname, arg))
+                        errors += [(taskname, arg)]
+            assert len(errors) == len(set(errors))
             # Report game and user IDs seen during this cycle
-            Tasks.add(set(self.games), set(self.users))
+            Tasks.add(set(self.games), set(self.users), errors)
             if self.my_work_here_is_done:
                 break
             sleep(0.001)
@@ -140,21 +158,20 @@ class WatcherThread(Thread):
         self._remaining_cycles -= 1
         return (self._remaining_cycles == 0)
 
-    @squelch_errors
     def do_user(self, userid):
         games = self.watcher.get_recent_games(userid, region=EUROPE_WEST)['games']
         for game_dct in games:
-            fellow_players = [dct['summonerId'] for dct in game_dct['fellowPlayers']]
-            self.users += fellow_players
-            gameid = game_dct['gameId']
             if self.is_ranked(game_dct):
+                fellow_players = [dct['summonerId'] for dct in game_dct['fellowPlayers']]
+                self.users += fellow_players
+                gameid = game_dct['gameId']
                 self.games += [gameid]
 
-    @squelch_errors
     def do_game(self, gameid):
         dumpme = self.watcher.get_match(gameid, region=EUROPE_WEST, include_timeline=True)
         self.ES.index(index=RIOT_GAMES_INDEX, doc_type=GAME_DOCTYPE, id=gameid, body=dumpme)
         Tasks.redis.zadd(TO_CRUNCHER, 0, gameid)
+        # TODO - assert that insert into ES and into redis worked
         participants = [dct['player']['summonerId'] for dct in dumpme['participantIdentities']]
         self.users += participants
 
