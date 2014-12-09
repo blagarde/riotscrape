@@ -191,8 +191,9 @@ class WatcherThread(Thread):
 
 class LoggingThread(Thread):
     def run(self):
+        self.keep_going = True
         LOG_INTERVAL = 10  # seconds
-        while True:
+        while self.keep_going:
             logging.info("total_games/new_games\t%s\t%s" % (Tasks.total_games, Tasks.new_games))
             sleep(LOG_INTERVAL)
 
@@ -216,8 +217,7 @@ class Scraper(object):
                     t._remaining_cycles = 1
                 for t in self.threads:
                     t.join()
-                lt.kill()
-                gct.kill()
+                lt.keep_going, gct.keep_going = False, False
                 break
 
 
