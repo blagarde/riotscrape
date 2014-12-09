@@ -204,14 +204,20 @@ class Scraper(object):
     def scrape(self):
         for t in self.threads:
             t.start()
-        LoggingThread().start()
-        GameCounterThread().start()
+        lt, gct = LoggingThread(), GameCounterThread()
+        lt.start()
+        gct.start()
         while True:
             try:
                 sleep(0.1)
             except KeyboardInterrupt:
+                logging.warning("KeyboardInterrupt received. Shutting down all threads NOW")
                 for t in self.threads:
                     t._remaining_cycles = 1
+                for t in self.threads:
+                    t.join()
+                lt.kill()
+                gct.kill()
                 break
 
 
