@@ -1,20 +1,14 @@
 from unittest import TestCase
-from log import RiotLog
-from main import CustomRedis
-import datetime
+from riotscrape import CustomRedis
 import re
+from config import REDIS_PARAM
 from itertools import izip
-from
 
 
 def get_counts(msg):
     regex = re.compile(r'total_games/new_games\t(?P<total>\d+)\t(?P<new>\d+)')
     dct = regex.match(msg).groupdict()
     return int(dct['total']), int(dct['new'])
-
-
-LOGFILE = '/home/blagarde/riotscrape/riotscrape.log'
-RL = RiotLog(LOGFILE)
 
 
 QUEUE = 'test_queue'
@@ -24,7 +18,7 @@ TEST_LST = map(str, range(12345))
 
 class RedisQueueTests(TestCase):
     def setUp(self):
-        self.r = CustomRedis()
+        self.r = CustomRedis(**REDIS_PARAM)
         self.r.delete(QUEUE)
 
     def test_bulk_rpop1(self):
@@ -52,7 +46,7 @@ class RedisQueueTests(TestCase):
 
 class RedisSetTests(TestCase):
     def setUp(self):
-        self.r = CustomRedis()
+        self.r = CustomRedis(**REDIS_PARAM)
         self.r.delete(SET)
         self.r._bulk_sadd(SET, TEST_LST, step=2)
 
