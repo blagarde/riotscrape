@@ -1,5 +1,4 @@
 from elasticsearch import helpers
-import json
 
 
 def bulk_action_gen(items, index, doctype, id_fieldname='id'):
