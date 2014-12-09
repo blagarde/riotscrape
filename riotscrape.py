@@ -107,12 +107,14 @@ class Tasks(object):
     def _handle_errors(cls, errors):
         '''Place failed game (resp. user) IDs at the start of the queue so they get redone first'''
         error_games = [gid for taskname, gid in errors if taskname == 'game']
-        cls.redis.srem(GAME_SET, *error_games)
-        cls.redis.rpush(GAME_QUEUE, *error_games)
+        if error_games:
+            cls.redis.srem(GAME_SET, *error_games)
+            cls.redis.rpush(GAME_QUEUE, *error_games)
 
         error_users = [uid for taskname, uid in errors if taskname == 'user']
-        cls.redis.srem(USER_SET, *error_users)
-        cls.redis.rpush(USER_QUEUE, *error_users)
+        if error_users:
+            cls.redis.srem(USER_SET, *error_users)
+            cls.redis.rpush(USER_QUEUE, *error_users)
 
 
 class WatcherThread(Thread):
