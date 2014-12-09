@@ -179,7 +179,7 @@ class WatcherThread(Thread):
     @staticmethod
     def is_ranked(game_dct):
         try:
-            return (game_dct['subType'][:6] == "RANKED")
+            return (game_dct['subType'] == "RANKED_SOLO_5x5")
         except:
             logging.error("There be trouble.")
             return False
