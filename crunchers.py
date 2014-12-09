@@ -6,7 +6,7 @@ from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, RIOT_GAMES_INDEX, RIOT_U
 from redis import StrictRedis as Buffer
 from user import User
 from elasticsearch import helpers
-from feature_extractor import ProbaExtractor, RulesExtractor
+from feature_extractor import AggregateDataNormalizer, HighLevelFeatureCalculator
 from abc import abstractmethod
 import json
 
@@ -122,7 +122,7 @@ class UserCruncher(Cruncher):
     
     def __init__(self):
         Cruncher.__init__(self)
-        self.FE = [ProbaExtractor, RulesExtractor]
+        self.FE = [AggregateDataNormalizer, HighLevelFeatureCalculator]
 
     def _init_ids(self):
         self.content = self.buffer.pipeline().zrange('users', 0, 1000).zremrangebyrank('users', 0, 1000).execute()[0]
