@@ -7,7 +7,8 @@ from time import sleep
 from config import RIOT_USERS_INDEX, ES_NODES
 
 
-INTERVAL = 3600  # seconds
+STEP = 1000
+NAP_TIME = 3.6  # seconds
 
 
 class GameCounterThread(Thread):
@@ -19,4 +20,7 @@ class GameCounterThread(Thread):
             cnt = Counter([u['_source']['aggregate']['nGame'] for u in users])
             dump = json.dumps(dict(cnt))
             logging.info("GAME COUNTS:\t" + dump)
-            sleep(INTERVAL)
+            for i in range(STEP):
+                if not self.keep_going:
+                    return
+                sleep(NAP_TIME)
