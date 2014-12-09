@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from threading import Thread, Lock
 from collections import defaultdict
-from config import KEYS, ES_NODES, GAME_DOCTYPE, RIOT_GAMES_INDEX
+from config import KEYS, ES_NODES, GAME_DOCTYPE, RIOT_GAMES_INDEX, TO_CRUNCHER
 from config import REDIS_PARAM, GAME_SET, USER_SET, GAME_QUEUE, USER_QUEUE
 from riotwatcher.riotwatcher import RiotWatcher, EUROPE_WEST, RateLimit
 from elasticsearch import Elasticsearch
@@ -11,8 +11,10 @@ from redis import StrictRedis
 import logging
 from report import GameCounterThread
 from log import init_logging
-from utils import split_seq, load_as_set, squelch_errors
+from utils import split_seq, load_as_set
 from argparse import ArgumentParser
+from es_utils import bulk_upsert
+import json
 
 
 ALL_USERS = '100k_users.txt'  # arbitrary
@@ -101,6 +103,18 @@ class Tasks(object):
             cls.total_games += len(games)
             cls.new_games += len(new_games)
 
+    @classmethod
+    def rollback(cls, games, users):
+        '''Place failed game (resp. user) IDs at the start of the queue so they get redone first'''
+        with cls.lock:
+            if games:
+                cls.redis.srem(GAME_SET, *games)
+                cls.redis.rpush(GAME_QUEUE, *games)
+
+            if users:
+                cls.redis.srem(USER_SET, *users)
+                cls.redis.rpush(USER_QUEUE, *users)
+
 
 class WatcherThread(Thread):
 
@@ -114,24 +128,34 @@ class WatcherThread(Thread):
     def run(self):
         '''Main loop. Get tasks and execute them. (1 task == 1 request).'''
         while True:
-            self.games, self.users = [], []
+            self.games, self.users, self.scraped_games = [], [], []
             games, users = Tasks.get()
             logging.debug("Fetched (games/users):\t%s\t%s" % (len(games), len(users)))
-            for taskname, lst in [('game', games), ('user', users)]:
-                for arg in lst:
-                    while True:
-                        if self.watcher.can_make_request():
-                            task = getattr(self, 'do_' + taskname)
-                            logging.info("Task:\t%s\t%s" % (taskname, arg))
-                            task(arg)
-                            break
-                        else:
-                            sleep(0.001)
-            # Report game and user IDs seen during this cycle
-            Tasks.add(set(self.games), set(self.users))
+
+            try:
+                self.process_tasks('game', games)
+                self.process_tasks('user', users)
+                bulk_upsert(self.ES, RIOT_GAMES_INDEX, GAME_DOCTYPE, self.scraped_games, id_fieldname='matchId')
+                # Report game and user IDs seen during this cycle
+                Tasks.add(set(self.games), set(self.users))
+            except:
+                logging.error("Rolling back %s games and %s users" % (len(games), len(users)))
+                Tasks.rollback(games, users)
+
             if self.my_work_here_is_done:
                 break
             sleep(0.001)
+
+    def process_tasks(self, taskname, arg_lst):
+        for arg in arg_lst:
+            while True:
+                if self.watcher.can_make_request():
+                    task = getattr(self, 'do_' + taskname)
+                    logging.info("Task:\t%s\t%s" % (taskname, arg))
+                    task(arg)
+                    break
+                else:
+                    sleep(0.001)
 
     @property
     def my_work_here_is_done(self):
@@ -140,27 +164,26 @@ class WatcherThread(Thread):
         self._remaining_cycles -= 1
         return (self._remaining_cycles == 0)
 
-    @squelch_errors
     def do_user(self, userid):
         games = self.watcher.get_recent_games(userid, region=EUROPE_WEST)['games']
         for game_dct in games:
-            fellow_players = [dct['summonerId'] for dct in game_dct['fellowPlayers']]
-            self.users += fellow_players
-            gameid = game_dct['gameId']
             if self.is_ranked(game_dct):
+                fellow_players = [dct['summonerId'] for dct in game_dct['fellowPlayers']]
+                self.users += fellow_players
+                gameid = game_dct['gameId']
                 self.games += [gameid]
 
-    @squelch_errors
     def do_game(self, gameid):
         dumpme = self.watcher.get_match(gameid, region=EUROPE_WEST, include_timeline=True)
-        self.ES.index(index=RIOT_GAMES_INDEX, doc_type=GAME_DOCTYPE, id=gameid, body=dumpme)
         participants = [dct['player']['summonerId'] for dct in dumpme['participantIdentities']]
         self.users += participants
+        self.scraped_games += [dumpme]
+        Tasks.redis.lpush(TO_CRUNCHER, json.dumps(dumpme))
 
     @staticmethod
     def is_ranked(game_dct):
         try:
-            return (game_dct['subType'][:6] == "RANKED")
+            return (game_dct['subType'] == "RANKED_SOLO_5x5")
         except:
             logging.error("There be trouble.")
             return False
@@ -168,8 +191,9 @@ class WatcherThread(Thread):
 
 class LoggingThread(Thread):
     def run(self):
+        self.keep_going = True
         LOG_INTERVAL = 10  # seconds
-        while True:
+        while self.keep_going:
             logging.info("total_games/new_games\t%s\t%s" % (Tasks.total_games, Tasks.new_games))
             sleep(LOG_INTERVAL)
 
@@ -181,8 +205,20 @@ class Scraper(object):
     def scrape(self):
         for t in self.threads:
             t.start()
-        LoggingThread().start()
-        GameCounterThread().start()
+        lt, gct = LoggingThread(), GameCounterThread()
+        lt.start()
+        gct.start()
+        while True:
+            try:
+                sleep(0.1)
+            except KeyboardInterrupt:
+                logging.warning("KeyboardInterrupt received. Shutting down all threads NOW")
+                for t in self.threads:
+                    t._remaining_cycles = 1
+                for t in self.threads:
+                    t.join()
+                lt.keep_going, gct.keep_going = False, False
+                break
 
 
 if __name__ == "__main__":

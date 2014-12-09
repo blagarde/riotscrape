@@ -73,13 +73,14 @@ class GameCruncher(Cruncher):
         req.execute()
 
     def _init_ids(self):
-        self.content = self.buffer.pipeline().zrange('games', 0, 1000).zremrangebyrank('games', 0, 1000).execute()[0]
+        p = self.buffer.pipeline()
+        for i in range(1000):
+            p.rpop('games')
+        self.content = [i for i in p.execute() if i is not None]
         self.USERS_ID = set(self.buffer.smembers('users_set'))
 
-    def _get_content(self, games_id):
-        body = {'ids': games_id}
-        games = self.ES.mget(index=RIOT_GAMES_INDEX, doc_type=GAME_DOCTYPE, body=body)
-        return [game for game in games["docs"]]
+    def _get_content(self, game_lst):
+        return [json.loads(game) for game in game_lst]
 
     def _process_content(self, game):
         if not game['found']:

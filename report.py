@@ -7,15 +7,20 @@ from time import sleep
 from config import RIOT_USERS_INDEX, ES_NODES
 
 
-INTERVAL = 3600  # seconds
+STEP = 1000
+NAP_TIME = 3.6  # seconds
 
 
 class GameCounterThread(Thread):
     def run(self):
-        while True:
+        self.keep_going = True
+        while self.keep_going:
             ES = Elasticsearch(ES_NODES)
             users = helpers.scan(client=ES, query={}, scroll="10m", index=RIOT_USERS_INDEX, doc_type='user', timeout="10m")
             cnt = Counter([u['_source']['aggregate']['nGame'] for u in users])
             dump = json.dumps(dict(cnt))
             logging.info("GAME COUNTS:\t" + dump)
-            sleep(INTERVAL)
+            for i in range(STEP):
+                if not self.keep_going:
+                    return
+                sleep(NAP_TIME)

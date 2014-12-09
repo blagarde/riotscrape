@@ -3,11 +3,10 @@ from riotscrape import WatcherThread, Tasks
 from unittest import TestCase
 import unittest
 from config import TEST_KEY, TEST_KEY2, ES_NODES, GAME_DOCTYPE
-from config import GAME_QUEUE, USER_QUEUE, GAME_SET, USER_SET
+from config import GAME_QUEUE, USER_QUEUE, GAME_SET, USER_SET, TO_CRUNCHER
 from time import sleep
 from interruptingcow import timeout
 from elasticsearch import Elasticsearch
-
 
 HERE = os.path.abspath(os.path.dirname(__file__))
 TEST_GAME_FILE = os.path.join(HERE, '53rankedgames.txt')
@@ -27,8 +26,10 @@ class ThreadingTests(TestCase):
         print USER_QUEUE, Tasks.redis.llen(USER_QUEUE)
         print GAME_SET, Tasks.redis.scard(GAME_SET)
         print USER_SET, Tasks.redis.scard(USER_SET)
+        print TO_CRUNCHER, Tasks.redis.llen(TO_CRUNCHER)
+        Tasks.new_games = 0
         raw_input("About to delete the above-listed Redis keys. CTRL-C to abort, <enter> to continue.")
-        for key in GAME_QUEUE, USER_QUEUE, GAME_SET, USER_SET:
+        for key in GAME_QUEUE, USER_QUEUE, GAME_SET, USER_SET, TO_CRUNCHER:
             Tasks.redis.delete(key)
         self.es.delete_by_query(index=TEST_ES_INDEX, doc_type=GAME_DOCTYPE, body={"query": {"match_all": {}}})
         print "Be patient (10s) - making sure API is available"
