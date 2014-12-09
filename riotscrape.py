@@ -131,15 +131,15 @@ class WatcherThread(Thread):
             games, users = Tasks.get()
             logging.debug("Fetched (games/users):\t%s\t%s" % (len(games), len(users)))
 
-            # try:
-            self.process_tasks('game', games)
-            self.process_tasks('user', users)
-            bulk_upsert(self.ES, RIOT_GAMES_INDEX, GAME_DOCTYPE, self.scraped_games, id_fieldname='matchId')
-            # Report game and user IDs seen during this cycle
-            Tasks.add(set(self.games), set(self.users))
-            # except:
-            #     logging.error("Rolling back %s games and %s users" % (len(games), len(users)))
-            #     Tasks.rollback(games, users)
+            try:
+                self.process_tasks('game', games)
+                self.process_tasks('user', users)
+                bulk_upsert(self.ES, RIOT_GAMES_INDEX, GAME_DOCTYPE, self.scraped_games, id_fieldname='matchId')
+                # Report game and user IDs seen during this cycle
+                Tasks.add(set(self.games), set(self.users))
+            except:
+                logging.error("Rolling back %s games and %s users" % (len(games), len(users)))
+                Tasks.rollback(games, users)
 
             if self.my_work_here_is_done:
                 break
