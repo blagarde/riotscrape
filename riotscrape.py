@@ -206,6 +206,13 @@ class Scraper(object):
             t.start()
         LoggingThread().start()
         GameCounterThread().start()
+        while True:
+            try:
+                sleep(0.1)
+            except KeyboardInterrupt:
+                for t in self.threads:
+                    t._remaining_cycles = 1
+                break
 
 
 if __name__ == "__main__":
