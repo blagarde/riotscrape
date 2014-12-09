@@ -106,13 +106,14 @@ class Tasks(object):
     @classmethod
     def rollback(cls, games, users):
         '''Place failed game (resp. user) IDs at the start of the queue so they get redone first'''
-        if games:
-            cls.redis.srem(GAME_SET, *games)
-            cls.redis.rpush(GAME_QUEUE, *games)
+        with cls.lock:
+            if games:
+                cls.redis.srem(GAME_SET, *games)
+                cls.redis.rpush(GAME_QUEUE, *games)
 
-        if users:
-            cls.redis.srem(USER_SET, *users)
-            cls.redis.rpush(USER_QUEUE, *users)
+            if users:
+                cls.redis.srem(USER_SET, *users)
+                cls.redis.rpush(USER_QUEUE, *users)
 
 
 class WatcherThread(Thread):
