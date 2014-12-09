@@ -53,10 +53,10 @@ class Cruncher(object):
     @abstractmethod
     def _build_bulk_request(self, users):
         pass
-    
+
 
 class GameCruncher(Cruncher):
-    
+
     def __init__(self):
         Cruncher.__init__(self)
         self.gamesnotfound = set()
@@ -101,7 +101,7 @@ class GameCruncher(Cruncher):
             except KeyError:
                 user = User(user_id)
             for f in self.AE:
-                user = f(user, game).apply()  
+                user = f(user, game).apply()
             user["games_id_list"].append(int(game['_id']))
             self.USERS[user_id] = user
 
@@ -114,12 +114,13 @@ class GameCruncher(Cruncher):
                 "_type": USER_DOCTYPE,
                 "script": "update_agg_data",
                 "params": {"data": json.dumps(user)},
-                "upsert": user}
+                "upsert": user,
+            }
             yield query
 
 
 class UserCruncher(Cruncher):
-    
+
     def __init__(self):
         Cruncher.__init__(self)
         self.FE = [AggregateDataNormalizer, HighLevelFeatureCalculator]
