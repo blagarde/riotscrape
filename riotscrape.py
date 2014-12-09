@@ -13,6 +13,7 @@ from report import GameCounterThread
 from log import init_logging
 from utils import split_seq, load_as_set
 from argparse import ArgumentParser
+from es_utils import bulk_upsert
 import json
 
 
@@ -83,10 +84,9 @@ class Tasks(object):
             return new_games, users
 
     @classmethod
-    def add(cls, games, users, errors=[]):
+    def add(cls, games, users):
         '''Stack some new game IDs and user IDs onto Redis and store the number of games processed'''
         with cls.lock:
-            cls._handle_errors(errors)
             new_games = [g for g, is_old in cls.redis._intersect(GAME_SET, games, insert=False) if not is_old]
             if new_games:
                 cls.redis.lpush(GAME_QUEUE, *new_games)
@@ -104,17 +104,15 @@ class Tasks(object):
             cls.new_games += len(new_games)
 
     @classmethod
-    def _handle_errors(cls, errors):
+    def rollback(cls, games, users):
         '''Place failed game (resp. user) IDs at the start of the queue so they get redone first'''
-        error_games = [gid for taskname, gid in errors if taskname == 'game']
-        if error_games:
-            cls.redis.srem(GAME_SET, *error_games)
-            cls.redis.rpush(GAME_QUEUE, *error_games)
+        if games:
+            cls.redis.srem(GAME_SET, *games)
+            cls.redis.rpush(GAME_QUEUE, *games)
 
-        error_users = [uid for taskname, uid in errors if taskname == 'user']
-        if error_users:
-            cls.redis.srem(USER_SET, *error_users)
-            cls.redis.rpush(USER_QUEUE, *error_users)
+        if users:
+            cls.redis.srem(USER_SET, *users)
+            cls.redis.rpush(USER_QUEUE, *users)
 
 
 class WatcherThread(Thread):
@@ -129,30 +127,34 @@ class WatcherThread(Thread):
     def run(self):
         '''Main loop. Get tasks and execute them. (1 task == 1 request).'''
         while True:
-            self.games, self.users = [], []
-            errors = []
+            self.games, self.users, self.scraped_games = [], [], []
             games, users = Tasks.get()
             logging.debug("Fetched (games/users):\t%s\t%s" % (len(games), len(users)))
-            for taskname, lst in [('game', games), ('user', users)]:
-                for arg in lst:
-                    try:
-                        while True:
-                            if self.watcher.can_make_request():
-                                task = getattr(self, 'do_' + taskname)
-                                logging.info("Task:\t%s\t%s" % (taskname, arg))
-                                task(arg)
-                                break
-                            else:
-                                sleep(0.001)
-                    except:
-                        logging.error("Failed to do %s: %s" % (taskname, arg))
-                        errors += [(taskname, arg)]
-            assert len(errors) == len(set(errors))
+
+            # try:
+            self.process_tasks('game', games)
+            self.process_tasks('user', users)
+            bulk_upsert(self.ES, RIOT_GAMES_INDEX, GAME_DOCTYPE, self.scraped_games, id_fieldname='matchId')
             # Report game and user IDs seen during this cycle
-            Tasks.add(set(self.games), set(self.users), errors)
+            Tasks.add(set(self.games), set(self.users))
+            # except:
+            #     logging.error("Rolling back %s games and %s users" % (len(games), len(users)))
+            #     Tasks.rollback(games, users)
+
             if self.my_work_here_is_done:
                 break
             sleep(0.001)
+
+    def process_tasks(self, taskname, arg_lst):
+        for arg in arg_lst:
+            while True:
+                if self.watcher.can_make_request():
+                    task = getattr(self, 'do_' + taskname)
+                    logging.info("Task:\t%s\t%s" % (taskname, arg))
+                    task(arg)
+                    break
+                else:
+                    sleep(0.001)
 
     @property
     def my_work_here_is_done(self):
@@ -172,10 +174,9 @@ class WatcherThread(Thread):
 
     def do_game(self, gameid):
         dumpme = self.watcher.get_match(gameid, region=EUROPE_WEST, include_timeline=True)
-        self.ES.index(index=RIOT_GAMES_INDEX, doc_type=GAME_DOCTYPE, id=gameid, body=dumpme)
-        # TODO - assert that insert into ES and into redis worked
         participants = [dct['player']['summonerId'] for dct in dumpme['participantIdentities']]
         self.users += participants
+        self.scraped_games += [dumpme]
         Tasks.redis.lpush(TO_CRUNCHER, json.dumps(dumpme))
 
     @staticmethod
