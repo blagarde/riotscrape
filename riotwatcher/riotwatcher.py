@@ -179,7 +179,7 @@ class RateLimit:
         self.__reload()
         return len(self.made_requests) < self.allowed_requests
 
-    def async_request_available(self,nb_request):
+    def async_request_available(self, nb_request):
         self.__reload()
         return self.allowed_requests - len(self.made_requests) >= nb_request
 
@@ -196,7 +196,7 @@ class RiotWatcher:
                 return False
         return True
 
-    def can_make_async_request(self,nb_request):
+    def can_make_async_request(self, nb_request):
         for lim in self.limits:
             if not lim.async_request_available(nb_request):
                 return False
@@ -466,7 +466,6 @@ class RiotWatcher:
         r = requests.get('http://status.leagueoflegends.com/{url}'.format(url=url))
         raise_status(r)
         return r.json()
-
 
     # matchhistory-v2.2
     def _match_history_request(self, end_url, region, **kwargs):
