@@ -1,8 +1,7 @@
 from multiprocessing import Pool
-from aggregate_extractor import ChampionExtractor, GameModeExtractor,\
-    QueueTypeExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor
+from aggregate_extractor import ChampionExtractor, QueueTypeExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor
 from elasticsearch.client import Elasticsearch
-from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, RIOT_GAMES_INDEX, RIOT_USERS_INDEX, NB_PROCESSES, USER_DOCTYPE
+from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, NB_PROCESSES, USER_DOCTYPE, RIOT_GAMES_INDEX, RIOT_USERS_INDEX
 from redis import StrictRedis as Buffer
 from user import User
 from elasticsearch import helpers
@@ -60,7 +59,7 @@ class GameCruncher(Cruncher):
     def __init__(self):
         Cruncher.__init__(self)
         self.gamesnotfound = set()
-        self.AE = [QueueTypeExtractor, GameModeExtractor, ChampionExtractor,
+        self.AE = [QueueTypeExtractor, ChampionExtractor,
                    ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor]
 
     def _end_crunching(self):
