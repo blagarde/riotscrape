@@ -129,7 +129,7 @@ class HighLevelFeatureCalculator(FeatureExtractor):
 
 class HighLevelEntropicFeatureCalculator(FeatureExtractor):
     """
-    Computes Entropic High Level Features. Actually it only computes Entropy for the loyalty feature
+    Computes Entropic High Level Features. Actually, it only computes Entropy for the loyalty feature
     """
     # TODO: make this class more general
     def __init__(self, user):
