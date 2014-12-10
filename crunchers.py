@@ -67,14 +67,10 @@ class GameCruncher(Cruncher):
         for i, ui in enumerate(self.USERS):
             req.zadd("users", i, ui)
         req.execute()
-        req = self.buffer.pipeline()
-        for gid in self.gamesnotfound:
-            req.sadd("gamesnotfound", gid)
-        req.execute()
 
     def _init_ids(self):
         p = self.buffer.pipeline()
-        for i in range(1000):
+        for _ in range(1000):
             p.rpop('games')
         self.content = [i for i in p.execute() if i is not None]
         self.USERS_ID = set(self.buffer.smembers('users_set'))

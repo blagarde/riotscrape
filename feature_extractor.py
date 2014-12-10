@@ -49,8 +49,8 @@ class AggregateDataNormalizer(FeatureExtractor):
         for k, v in self.probas.items():
             if k not in user["aggregate"]:
                 user["aggregate"][k] = 0
-            if user["aggregate"]["nGame"] != 0:
-                user["feature"][k] = (max(v[0], min(v[1], float(user["aggregate"][k])/ user["aggregate"]["nGame"])) - v[0]) / (v[1] - v[0])
+            if user["aggregate"]["Game"] != 0:
+                user["feature"][k] = (max(v[0], min(v[1], float(user["aggregate"][k])/ user["aggregate"]["Game"])) - v[0]) / (v[1] - v[0])
             else:
                 user["feature"][k] = 0
         return user
