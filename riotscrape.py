@@ -4,7 +4,7 @@ from threading import Thread, Lock
 from collections import defaultdict
 from config import KEYS, ES_NODES, GAME_DOCTYPE, RIOT_GAMES_INDEX, TO_CRUNCHER
 from config import REDIS_PARAM, GAME_SET, USER_SET, GAME_QUEUE, USER_QUEUE
-from riotwatcher.riotwatcher import RiotWatcher, EUROPE_WEST, RateLimit
+from riotwatcher import RiotWatcher, EUROPE_WEST, RateLimit
 from elasticsearch import Elasticsearch
 from time import sleep
 from redis import StrictRedis
@@ -14,7 +14,6 @@ from log import init_logging
 from utils import split_seq, load_as_set
 from argparse import ArgumentParser
 from es_utils import bulk_upsert
-import json
 
 
 ALL_USERS = '100k_users.txt'  # arbitrary
