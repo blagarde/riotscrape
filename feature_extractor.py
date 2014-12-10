@@ -38,10 +38,14 @@ class AggregateDataNormalizer(FeatureExtractor):
         "FirstBloodAssist": (0., 1.),
         "KillingSprees": (0., 4.),
         "VisionWards": (0., 4.),
-        "CrowedControl": (1000., 5000.),
+        "CrowedControl": (20., 600.),
         "Gold": (4000., 18000.),
         "PlayerTowers": (0., 5.),
         "PlayerInhibitor": (0., 2.),
+        "Soloer": (0.,1.),
+        "Adc": (0.,1.),
+        "Support": (0., 1.),
+        "Jungler": (0., 1.),
     }
     
     def apply(self):
@@ -71,16 +75,18 @@ class HighLevelFeatureCalculator(FeatureExtractor):
             "Kills": 1,
             "Deaths": -2,
             "Assists": -1,
-            "Bot": -3},
+            "Bot": -3,
+            "Soloer": 3
+            },
         "action": {
             "Kills": 2,
             "Deaths": 2,
             "Assists": 2,
-            "Mid": 1,
-            "Jungle": 1,
+            "Mid": 2,
+            "Jungle": 2,
             "FirstBlood": 3,
             "FirstBloodAssists": 3,
-            "Duration": -2,
+            "Level": -2,
             "Top": -2,
             "Bot": -2,
             "CreepEnemy": 2},
@@ -88,18 +94,28 @@ class HighLevelFeatureCalculator(FeatureExtractor):
             "Bot": 2,
             "Jungle": 2,
             "Dragons": 2,
-            "Nashors": 2,
+            "Barons": 2,
             "Top": -2,
             "Minions": -1,
-            "Level": -1,
-            "Wards": 2},
+            "Level": 2,
+            "Wards": 2,
+            "VisionWards": 1,
+            "Soloer": -2,
+            "Support": 3,
+            "Adc": 2,
+            "Deaths": 2
+            },
         "strategy": {
-            "Towers": 1,
+            "Towers": 2,
+            "PlayerTowers": 3,
             "Dragons": 3,
-            "Nashors": 3,
+            "Barons": 3,
             "Inhibitors": 2,
+            "PlayerInhibitors": 3,
             "Wards": 3,
-            "WardsKilled": 2}
+            "WardsKilled": 2,
+            "VisionWards": 2,
+            }
     }
 
     def apply(self):
