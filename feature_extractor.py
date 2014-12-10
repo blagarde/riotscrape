@@ -127,7 +127,7 @@ class HighLevelFeatureCalculator(FeatureExtractor):
         pass
 
 
-class HighLevelEntropyFeatureCalculator(FeatureExtractor):
+class HighLevelEntropicFeatureCalculator(FeatureExtractor):
     """
     Computes Entropic High Level Features. Actually it only computes Entropy for the loyalty feature
     """

@@ -5,7 +5,7 @@ from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, NB_PROCESSES, USER_DOCTY
 from redis import StrictRedis as Buffer
 from user import User
 from elasticsearch import helpers
-from feature_extractor import AggregateDataNormalizer, HighLevelFeatureCalculator, HighLevelEntropyFeatureCalculator
+from feature_extractor import AggregateDataNormalizer, HighLevelFeatureCalculator, HighLevelEntropicFeatureCalculator
 from abc import abstractmethod
 import json
 
@@ -121,7 +121,7 @@ class UserCruncher(Cruncher):
 
     def __init__(self):
         Cruncher.__init__(self)
-        self.FE = [AggregateDataNormalizer, HighLevelFeatureCalculator, HighLevelEntropyFeatureCalculator]
+        self.FE = [AggregateDataNormalizer, HighLevelFeatureCalculator, HighLevelEntropicFeatureCalculator]
 
     def _init_ids(self):
         self.content = self.buffer.pipeline().zrange('cruncher_out', 0, 1000).zremrangebyrank('cruncher_out', 0, 1000).execute()[0]
