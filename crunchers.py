@@ -1,13 +1,14 @@
 from multiprocessing import Pool
-from aggregate_extractor import ChampionExtractor, GameModeExtractor,\
-    QueueTypeExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor
+from aggregate_extractor import ChampionExtractor, QueueTypeExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor,\
+    RoleExtractor
 from elasticsearch.client import Elasticsearch
-from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, RIOT_GAMES_INDEX, RIOT_USERS_INDEX, NB_PROCESSES, USER_DOCTYPE
+from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, NB_PROCESSES, USER_DOCTYPE, RIOT_GAMES_INDEX, RIOT_USERS_INDEX,\
+    TO_CRUNCHER, TO_USERCRUNCHER
 from redis import StrictRedis as Buffer
 from user import User
 from cluster_service import ClusterService
 from elasticsearch import helpers
-from feature_extractor import ProbaExtractor, RulesExtractor
+from feature_extractor import AggregateDataNormalizer, HighLevelFeatureCalculator, EntropicFeatureCalculator
 from abc import abstractmethod
 import json
 
@@ -54,29 +55,27 @@ class Cruncher(object):
     @abstractmethod
     def _build_bulk_request(self, users):
         pass
-    
+
 
 class GameCruncher(Cruncher):
-    
+
     def __init__(self):
         Cruncher.__init__(self)
         self.gamesnotfound = set()
-        self.AE = [QueueTypeExtractor, GameModeExtractor, ChampionExtractor,
-                   ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor]
+        self.AE = [QueueTypeExtractor, ChampionExtractor,
+                   ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor, RoleExtractor]
 
     def _end_crunching(self):
         req = self.buffer.pipeline()
         for i, ui in enumerate(self.USERS):
-            req.zadd("users", i, ui)
-        req.execute()
-        req = self.buffer.pipeline()
-        for gid in self.gamesnotfound:
-            req.sadd("gamesnotfound", gid)
+            req.zadd(TO_USERCRUNCHER, i, ui)
         req.execute()
 
     def _init_ids(self):
-        self.content = self.buffer.pipeline().zrange('games', 0, 1000).zremrangebyrank('games', 0, 1000).execute()[0]
-        self.USERS_ID = set(self.buffer.smembers('users_set'))
+        p = self.buffer.pipeline()
+        for _ in range(1000):
+            p.rpop(TO_CRUNCHER)
+        self.content = [i for i in p.execute() if i is not None]
 
     def _get_content(self, games_id):
         body = {'ids': games_id}
@@ -84,9 +83,6 @@ class GameCruncher(Cruncher):
         return [game for game in games["docs"]]
 
     def _process_content(self, game):
-        if not game['found']:
-            self.gamesnotfound.add(game["_id"])
-            return
         for participant in game["_source"]["participantIdentities"]:
             self._process_participant(participant, game)
 
@@ -95,8 +91,6 @@ class GameCruncher(Cruncher):
             return
         else:
             user_id = participant["player"]["summonerId"]
-            if str(user_id) not in self.USERS_ID:
-                return
             try:
                 user = self.USERS[user_id]
             except KeyError:
@@ -115,20 +109,19 @@ class GameCruncher(Cruncher):
                 "_type": USER_DOCTYPE,
                 "script": "update_agg_data",
                 "params": {"data": json.dumps(user)},
-                "upsert": user}
+                "upsert": user,
+            }
             yield query
 
 
 class UserCruncher(Cruncher):
-    
+
     def __init__(self):
         Cruncher.__init__(self)
-        self.FE = [ProbaExtractor, RulesExtractor]
-        self.cs = ClusterService("labelling_files/scaler_9g", "labelling_files/clf_9g")
+        self.FE = [AggregateDataNormalizer, HighLevelFeatureCalculator, EntropicFeatureCalculator]
 
     def _init_ids(self):
-        self.content = self.buffer.pipeline().zrange('users', 0, 1000).zremrangebyrank('users', 0, 1000).execute()[0]
-        self.USERS_ID = self.buffer.smembers('users_set')
+        self.content = self.buffer.pipeline().zrange(TO_USERCRUNCHER, 0, 1000).zremrangebyrank(TO_USERCRUNCHER, 0, 1000).execute()[0]
 
     def _get_content(self, user_ids):
         body = {'ids': user_ids}
@@ -145,18 +138,14 @@ class UserCruncher(Cruncher):
 
     def _build_bulk_request(self, users):
         for user in users:
-            doc = dict()
-            doc["feature"] = user["feature"]
-            label = self.cs.get_user_cluster(user)
-            if (label > -1):
-                doc["cluster"] = label
             query = {
                 "_op_type": "update",
                 "_id": user['id'],
                 "_index": RIOT_USERS_INDEX,
                 "_type": USER_DOCTYPE,
-                "doc": doc,
-                "upsert": user}
+                "doc": {"feature": user["feature"]},
+                "upsert": user
+                }
             yield query
 
     def _end_crunching(self):
@@ -168,6 +157,9 @@ def launch_cruncher(cruncher):
     cr.crunch()
 
 if __name__ == '__main__':
+#     #launch_cruncher(GameCruncher)
+#     launch_cruncher(UserCruncher)
     pool = Pool(processes=NB_PROCESSES)
     pool.map(launch_cruncher, [GameCruncher for _ in range(NB_PROCESSES*100)])
     # pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES*100)])
+    #pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES*100)])

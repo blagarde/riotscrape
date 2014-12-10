@@ -5,7 +5,7 @@ from cluster_service import ClusterService
 class ClusterServiceTest(unittest.TestCase):
     
     def setUp(self):
-        self.cs = ClusterService(scaler_fn='scaler.pkl', clf_fn='clf.pkl')
+        self.cs = ClusterService(scaler_fn='test/scaler.pkl', clf_fn='test/clf.pkl')
         self.cs.translator.features = hl_keys
 
     def test_cluster_service(self):
