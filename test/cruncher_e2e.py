@@ -28,7 +28,6 @@ class CruncherTests(unittest.TestCase):
         gc.crunch()
         sleep(2)
         es = Elasticsearch(ES_NODES)
-        print "Retreive crunched data"
         nb_user_crunched = es.count(index=RIOT_USERS_INDEX)
         self.assertEqual(10, nb_user_crunched['count'])
 
