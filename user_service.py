@@ -1,7 +1,7 @@
 from aggregate_extractor import ChampionExtractor, GameModeExtractor,\
     QueueTypeExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor
 from feature_extractor import ProbaExtractor, RulesExtractor
-from riotwatcher.riotwatcher import RiotWatcher, LoLException
+from griotwatcher.riotwatcher import RiotWatcher, LoLException
 from user import User
 from time import sleep, time
 from config import ES_NODES
@@ -28,7 +28,7 @@ class UserService(object):
         except TransportError:
             return self._get_user_from_riot(summoner_id, region)
 
-    def _get_id_from_riot(self,summoner_name,region):
+    def _get_id_from_riot(self, summoner_name, region):
         try:
             return self.id_watcher.get_summoner(name=summoner_name, region=region)['id']
         except LoLException:
@@ -127,4 +127,4 @@ if __name__ == "__main__":
     t_start = time()
     print se.get_crunched_user('dipl0mate', 'euw')
     t_end = time()
-    print t_end-t_start
+    print t_end - t_start
