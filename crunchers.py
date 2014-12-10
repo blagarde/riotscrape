@@ -5,7 +5,7 @@ from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, NB_PROCESSES, USER_DOCTY
 from redis import StrictRedis as Buffer
 from user import User
 from elasticsearch import helpers
-from feature_extractor import AggregateDataNormalizer, HighLevelFeatureCalculator
+from feature_extractor import AggregateDataNormalizer, HighLevelFeatureCalculator, HighLevelEntropyFeatureCalculator
 from abc import abstractmethod
 import json
 
@@ -65,15 +65,15 @@ class GameCruncher(Cruncher):
     def _end_crunching(self):
         req = self.buffer.pipeline()
         for i, ui in enumerate(self.USERS):
-            req.zadd("users", i, ui)
+            req.zadd("cruncher_out", i, ui)
         req.execute()
 
     def _init_ids(self):
         p = self.buffer.pipeline()
         for _ in range(1000):
-            p.rpop('games')
+            p.rpop('scraper_out')
         self.content = [i for i in p.execute() if i is not None]
-        self.USERS_ID = set(self.buffer.smembers('users_set'))
+        self.USERS_ID = set(self.buffer.smembers('user_set'))
 
     def _get_content(self, games_id):
         body = {'ids': games_id}
@@ -99,7 +99,7 @@ class GameCruncher(Cruncher):
             except KeyError:
                 user = User(user_id)
             for f in self.AE:
-                user = f(user, game).apply()
+                user = f(user, game["_source"]).apply()
             user["games_id_list"].append(int(game['_id']))
             self.USERS[user_id] = user
 
@@ -121,11 +121,11 @@ class UserCruncher(Cruncher):
 
     def __init__(self):
         Cruncher.__init__(self)
-        self.FE = [AggregateDataNormalizer, HighLevelFeatureCalculator]
+        self.FE = [AggregateDataNormalizer, HighLevelFeatureCalculator, HighLevelEntropyFeatureCalculator]
 
     def _init_ids(self):
-        self.content = self.buffer.pipeline().zrange('users', 0, 1000).zremrangebyrank('users', 0, 1000).execute()[0]
-        self.USERS_ID = self.buffer.smembers('users_set')
+        self.content = self.buffer.pipeline().zrange('cruncher_out', 0, 1000).zremrangebyrank('cruncher_out', 0, 1000).execute()[0]
+        self.USERS_ID = self.buffer.smembers('user_set')
 
     def _get_content(self, user_ids):
         body = {'ids': user_ids}

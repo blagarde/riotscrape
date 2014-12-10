@@ -1,2 +1,4 @@
-requests
+grequests
 pandas
+redis
+elasticsearch

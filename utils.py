@@ -1,5 +1,8 @@
 import itertools
 import logging
+from elasticsearch import Elasticsearch
+from config import ES_NODES, RIOT_GAMES_INDEX, GAME_DOCTYPE
+import json
 
 
 def split_seq(iterable, size):
@@ -29,3 +32,9 @@ def squelch_errors(method):
                 pass
         return run
     return raising(method)
+
+
+def jsonify_game(game_id):
+    es = Elasticsearch(ES_NODES)
+    response = es.get(index=RIOT_GAMES_INDEX, doc_type=GAME_DOCTYPE, id=game_id)
+    return json.dumps(response["_source"])

@@ -7,7 +7,7 @@ class User(dict):
         self['id'] = user_id
         self['feature'] = defaultdict(float)
         self['aggregate'] = defaultdict(int)
-        self['aggregate']['nChamp'] = defaultdict(int)
+        self['aggregate']['Champ'] = defaultdict(int)
         self['games_id_list'] = []
 
     def is_valid(self):

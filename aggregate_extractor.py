@@ -63,6 +63,7 @@ class QueueTypeExtractor(AggregateExtractor):
         self.aggregate['Game'] += 1
         return self.user
 
+
 class ChampionExtractor(AggregateExtractor):
 
     def apply(self):
@@ -76,9 +77,10 @@ class ParticipantStatsExtractor(AggregateExtractor):
     P_STATS = [('Kills', 'kills'), ('Deaths', 'deaths'), ('Assists', 'assists'),
                ('CreepsTeam', 'eutralMinionsKilledTeamJungle'), ('CreepsEnemy', 'eutralMinionsKilledEnemyJungle'),
                ('Minions', 'minionsKilled'), ('PlayerTowers', 'towerKills'),  ('Level', 'champLevel'),
-               ('WardsKilled', 'wardsKilled'), ('Wards', 'wardsPlaced'), ('FirstBlood','firstBloodKill'), ('FirstBloodAssist','firstBloodAssist'),
-               ('KillingSprees', 'killingSprees'), ('VisionWards', 'visionWardsBoughtInGame'), ('CrowedControl','totalTimeCrowdControlDealt'),
-               ('Gold','goldEarned'), ('PlayerInhibitor','inhibitorKills')]
+               ('WardsKilled', 'wardsKilled'), ('Wards', 'wardsPlaced'), ('FirstBlood', 'firstBloodKill'),
+               ('FirstBloodAssist', 'firstBloodAssist'), ('KillingSprees', 'killingSprees'),
+               ('VisionWards', 'visionWardsBoughtInGame'), ('CrowedControl', 'totalTimeCrowdControlDealt'),
+               ('Gold', 'goldEarned'), ('PlayerInhibitor', 'inhibitorKills')]
 
     @classic_game_only
     def apply(self):
