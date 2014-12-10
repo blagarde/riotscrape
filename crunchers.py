@@ -1,12 +1,11 @@
 from multiprocessing import Pool
-from aggregate_extractor import ChampionExtractor, GameModeExtractor,\
-    QueueTypeExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor
+from aggregate_extractor import ChampionExtractor, QueueTypeExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor
 from elasticsearch.client import Elasticsearch
-from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, RIOT_GAMES_INDEX, RIOT_USERS_INDEX, NB_PROCESSES, USER_DOCTYPE
+from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, NB_PROCESSES, USER_DOCTYPE, RIOT_GAMES_INDEX, RIOT_USERS_INDEX
 from redis import StrictRedis as Buffer
 from user import User
 from elasticsearch import helpers
-from feature_extractor import ProbaExtractor, RulesExtractor
+from feature_extractor import AggregateDataNormalizer, HighLevelFeatureCalculator
 from abc import abstractmethod
 import json
 
@@ -60,7 +59,7 @@ class GameCruncher(Cruncher):
     def __init__(self):
         Cruncher.__init__(self)
         self.gamesnotfound = set()
-        self.AE = [QueueTypeExtractor, GameModeExtractor, ChampionExtractor,
+        self.AE = [QueueTypeExtractor, ChampionExtractor,
                    ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor]
 
     def _end_crunching(self):
@@ -68,14 +67,10 @@ class GameCruncher(Cruncher):
         for i, ui in enumerate(self.USERS):
             req.zadd("users", i, ui)
         req.execute()
-        req = self.buffer.pipeline()
-        for gid in self.gamesnotfound:
-            req.sadd("gamesnotfound", gid)
-        req.execute()
 
     def _init_ids(self):
         p = self.buffer.pipeline()
-        for i in range(1000):
+        for _ in range(1000):
             p.rpop('games')
         self.content = [i for i in p.execute() if i is not None]
         self.USERS_ID = set(self.buffer.smembers('users_set'))
@@ -126,7 +121,7 @@ class UserCruncher(Cruncher):
 
     def __init__(self):
         Cruncher.__init__(self)
-        self.FE = [ProbaExtractor, RulesExtractor]
+        self.FE = [AggregateDataNormalizer, HighLevelFeatureCalculator]
 
     def _init_ids(self):
         self.content = self.buffer.pipeline().zrange('users', 0, 1000).zremrangebyrank('users', 0, 1000).execute()[0]

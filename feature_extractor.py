@@ -9,110 +9,105 @@ class FeatureExtractor(Extractor):
         self.user = user
 
 
-class ProbaExtractor(FeatureExtractor):
-    probas = {
-        "pMinions":        {"min": 0., "max": 250., "name": "nMinions", "ref": "nClassicGame"},
-        "pCreepsTeam":     {"min": 0., "max": 150., "name": "nCreepsTeam", "ref": "nClassicGame"},
-        "pCreepsEnemy":    {"min": 0., "max": 100., "name": "nCreepsEnemy", "ref": "nClassicGame"},
-        "pLevel":          {"min": 7., "max": 18., "name": "nLevel", "ref": "nClassicGame"},
-        "pKills":          {"min": 0., "max": 15., "name": "nKills", "ref": "nClassicGame"},
-        "pDeaths":         {"min": 0., "max": 15., "name": "nDeaths", "ref": "nClassicGame"},
-        "pAssists":        {"min": 0., "max": 20., "name": "nAssists", "ref": "nClassicGame"},
-        "pBot":            {"min": 0., "max": 1., "name": "nBot", "ref": "nClassicGame"},
-        "pTop":            {"min": 0., "max": 1., "name": "nTop", "ref": "nClassicGame"},
-        "pMid":            {"min": 0., "max": 1., "name": "nMid", "ref": "nClassicGame"},
-        "pJungle":         {"min": 0., "max": 1., "name": "nJungle", "ref": "nClassicGame"},
-        "pTowers":         {"min": 0., "max": 11., "name": "nTowers", "ref": "nClassicGame"},
-        "pDragons":        {"min": 0., "max": 5., "name": "nDragons", "ref": "nClassicGame"},
-        "pNashors":        {"min": 0., "max": 3., "name": "nNashors", "ref": "nClassicGame"},
-        "pInhibitors":     {"min": 0., "max": 7., "name": "nInhibitors", "ref": "nClassicGame"},
-        "pWards":          {"min": 0., "max": 13., "name": "nWards", "ref": "nClassicGame"},
-        "pWardsKilled":    {"min": 0., "max": 6., "name": "nWardsKilled", "ref": "nClassicGame"},
-        "pWin":            {"min": 0., "max": 1., "name": "nVictory", "ref": "nClassicGame"},
-        "pClassicGame":    {"min": 0., "max": 1., "name": "nClassicGame", "ref": "nGame"},
-        "pRanked":         {"min": 0., "max": 1., "name": "nRanked", "ref": "nGame"},
-        "pSubGame":        {"min": 0., "max": 1., "name": "nSubGame", "ref": "nGame"},
-        "pFirstBlood":     {"min": 0., "max": 1., "name": "nFirstBlood", "ref": "nClassicGame"},
-        "pFirstBloodAssists": {"min": 0., "max": 1., "name": "nFirstBloodAssist", "ref": "nClassicGame"},
-        "pKillingSpree":   {"min": 0., "max": 5., "name": "nKillingSprees", "ref": "nClassicGame"},
-        "pVisionWards":    {"min": 0., "max": 5., "name": "nVisionWards", "ref": "nClassicGame"},
-        "pCrowedControl":  {"min": 0., "max": 200., "name": "nCrowedControl", "ref": "nClassicGame"},
-        "pGold":           {"min": 3000., "max": 20000., "name": "nGold", "ref": "nClassicGame"},
-        "pPlayerTowers":   {"min": 0., "max": 4., "name": "nPlayerTowers", "ref": "nClassicGame"},
-        "pPlayerInhibitor": {"min": 0., "max": 3., "name": "nPlayerInhibitor", "ref": "nClassicGame"}}
-
+class AggregateDataNormalizer(FeatureExtractor):
+    """
+    Normalise les données aggrégées en probabilités selon des paramètres spécifiés pour chaque donnée.
+    Par exemple, la donnée du nombre de minions est rapportée à une moyenne par partie jouée puis
+    normalisée entre 0 et 1.
+    """
+    normalisation_params = {
+        "Minions": (0., 250.),
+        "Level": (7., 18.),
+        "CreepsEnemy": (0., 100.),
+        "CreepsTeam": (0., 150.),
+        "Kills": (0., 11.),
+        "Deaths": (0., 12.),
+        "Assists": (0., 20.),
+        "Bot": (0., 1.),
+        "Top": (0., 1.),
+        "Mid": (0., 1.),
+        "Jungle": (0., 1.),
+        "Towers": (0., 10.),
+        "Dragons": (0., 4.),
+        "Barons": (0., 2.),
+        "Inhibitors": (0., 3.),
+        "Wards": (0., 20.),
+        "WardsKilled": (0., 8.),
+        "Victory": (0., 1.),
+        "FirstBlood": (0., 1.),
+        "FirstBloodAssist": (0., 1.),
+        "KillingSprees": (0., 4.),
+        "VisionWards": (0., 4.),
+        "CrowedControl": (1000., 5000.),
+        "Gold": (4000., 18000.),
+        "PlayerTowers": (0., 5.),
+        "PlayerInhibitor": (0., 2.),
+    }
+    
     def apply(self):
         user = self.user
         for k, v in self.probas.items():
-            if v["ref"] not in user["aggregate"]:
-                user["aggregate"][v["ref"]] = 0
-            if v["name"] not in user["aggregate"]:
-                user["aggregate"][v["name"]] = 0
-            if user["aggregate"][v["ref"]] != 0:
-                user["feature"][k] = (max(v["min"], min(v["max"], float(user["aggregate"][v["name"]]) / user["aggregate"][v["ref"]])) - v["min"]) / (v["max"] - v["min"])
+            if k not in user["aggregate"]:
+                user["aggregate"][k] = 0
+            if user["aggregate"]["Game"] != 0:
+                user["feature"][k] = (max(v[0], min(v[1], float(user["aggregate"][k])/ user["aggregate"]["Game"])) - v[0]) / (v[1] - v[0])
             else:
                 user["feature"][k] = 0
         return user
 
 
-class RulesExtractor(FeatureExtractor):
 
-    def __init__(self, user):
-        FeatureExtractor.__init__(self, user)
-        self.categories = {
+class HighLevelFeatureCalculator(FeatureExtractor):
+    """
+    À partir des données normalisées, calcule des données high level
+    Ces données high level sont une moyenne pondérée des données normalisées
+    ou alors définis par une fonction
+    """
+    highLevelFeatures = {
             "solo": {
-                "pMinions": 3,
-                "pCreepsTeam": 1,
-                "pTop": 3,
-                "pMid": 2,
-                "pLevel": 2,
-                "pKills": 1,
-                "pDeaths": -2,
-                "pAssists": -1,
-                "pBot": -3},
+                "Minions": 3,
+                "CreepsTeam": 1,
+                "Top": 3,
+                "Mid": 2,
+                "Level": 2,
+                "Kills": 1,
+                "Deaths": -2,
+                "Assists": -1,
+                "Bot": -3},
             "action": {
-                "pKills": 2,
-                "pDeaths": 2,
-                "pAssists": 2,
-                "pMid": 1,
-                "pJungle": 1,
-                "pFirstBlood": 3,
-                "pFirstBloodAssists": 3,
-                "pDuration": -2,
-                "pTop": -2,
-                "pBot": -2,
-                "pCreepEnemy": 2},
+                "Kills": 2,
+                "Deaths": 2,
+                "Assists": 2,
+                "Mid": 1,
+                "Jungle": 1,
+                "FirstBlood": 3,
+                "FirstBloodAssists": 3,
+                "Duration": -2,
+                "Top": -2,
+                "Bot": -2,
+                "CreepEnemy": 2},
             "teamplay": {
-                "pBot": 2,
-                "pJungle": 2,
-                "pDragons": 2,
-                "pNashors": 2,
-                "pTop": -2,
-                "pMinions": -1,
-                "pLevel": -1,
-                "pWards": 2},
+                "Bot": 2,
+                "Jungle": 2,
+                "Dragons": 2,
+                "Nashors": 2,
+                "Top": -2,
+                "Minions": -1,
+                "Level": -1,
+                "Wards": 2},
             "strategy": {
-                "pTowers": 1,
-                "pDragons": 3,
-                "pNashors": 3,
-                "pInhibitors": 2,
-                "pWards": 3,
-                "pWardsKilled": 2},
-            "loyalty": self._loyalty,
-            "competition": {"pRanked": 1},
-            "diversity": {"pSubGame": 1}
+                "Towers": 1,
+                "Dragons": 3,
+                "Nashors": 3,
+                "Inhibitors": 2,
+                "Wards": 3,
+                "WardsKilled": 2},
+            "loyalty": HighLevelFeatureCalculator.entropy,
         }
-
-    @staticmethod
-    def _loyalty(user):
-        f = lambda x: x * log(x) if x != 0 else 0
-        l = [float(champ_count)/user["aggregate"]["nGame"] for _, champ_count in user["aggregate"]["nChamp"].items()]
-        s = sum(map(f, l))
-        return exp(s)
 
     def apply(self):
         user = self.user
-        for k, v in self.categories.items():
+        for k, v in self.highLevelFeatures.items():
             if type(v) != dict:
                 user["feature"][k] = v(user)
             else:
@@ -129,3 +124,10 @@ class RulesExtractor(FeatureExtractor):
                         coeff_sum += val
                 user["feature"][k] = res/coeff_sum
         return user
+
+    @staticmethod
+    def entropy(user):
+        xlogx = lambda x: x * log(x) if x != 0 else 0
+        champs_normalized_vals = [float(champ_count)/user["aggregate"]["Game"] for _, champ_count in user["aggregate"]["Champ"].items()]
+        normalized_entropy = exp(sum(map(xlogx, champs_normalized_vals)))
+        return normalized_entropy
