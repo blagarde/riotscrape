@@ -17,8 +17,6 @@ def delete_elasticsearch_index(test_index_name):
     es.indices.delete(index=test_index_name)
 
 
-
-
 def init_elasticsearch_for_testing_cruncher():
     # mock rito index
     init_elasticsearch_index(RIOT_GAMES_INDEX)

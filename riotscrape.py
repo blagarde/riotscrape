@@ -139,8 +139,8 @@ class WatcherThread(Thread):
                     Tasks.redis.lpush(TO_CRUNCHER, *games)
                 # Report game and user IDs seen during this cycle
                 Tasks.add(set(self.games), set(self.users))
-            except:
-                logging.error("Rolling back %s games and %s users" % (len(games), len(users)))
+            except Exception as e:
+                logging.error("Rolling back %s games and %s users: %s" % (len(games), len(users), e))
                 Tasks.rollback(games, users)
 
             if self.my_work_here_is_done:
@@ -178,7 +178,7 @@ class WatcherThread(Thread):
         dumpme = self.watcher.get_match(gameid, region=EUROPE_WEST, include_timeline=True)
         participants = [dct['player']['summonerId'] for dct in dumpme['participantIdentities']]
         self.users += participants
-        self.scraped_games += [gameid]
+        self.scraped_games += [dumpme]
 
     @staticmethod
     def is_ranked(game_dct):
