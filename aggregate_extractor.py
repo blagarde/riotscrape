@@ -107,6 +107,17 @@ class TeamStatsExtractor(AggregateExtractor):
         return self.user
 
 
+class RoleExtractor(AggregateExtractor):
+    ROLE_CONV = {'NONE':'Jungler', 'SOLO':'Soloer', 'DUO_CARRY':'Adc', 'DUO_SUPPORT':'Support', 'DUO':'Duo' }
+
+    @classic_game_only
+    def apply(self):
+        participant_id = self.get_participant_id(self.game, self.user["id"])
+        participant = self.get_participant(self.game, participant_id)
+        role = participant['timeline']['role']
+        self.aggregate[self.ROLE_CONV[role]] += 1
+        return self.user
+
 class LaneExtractor(AggregateExtractor):
     LANE_CONV = {'MIDDLE': 'Mid', 'TOP': 'Top', 'BOTTOM': 'Bot', 'JUNGLE': 'Jungle'}
 

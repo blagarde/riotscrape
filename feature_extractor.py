@@ -46,7 +46,7 @@ class AggregateDataNormalizer(FeatureExtractor):
     
     def apply(self):
         user = self.user
-        for k, v in self.probas.items():
+        for k, v in self.normalisation_params.items():
             if k not in user["aggregate"]:
                 user["aggregate"][k] = 0
             if user["aggregate"]["Game"] != 0:
@@ -103,45 +103,47 @@ class HighLevelFeatureCalculator(FeatureExtractor):
     }
 
     def apply(self):
-
         user = self.user
         for k, v in self.highLevelFeatures.items():
-            # from here
-            coeff_sum = 0
-            res = 0
-            for key, val in v.items():
-                if key not in user["feature"]:
-                    user["feature"][key] = 0
-                if val < 0:
-                    res += -val*(1-user["feature"][key])
-                    coeff_sum += -val
-                else:
-                    res += val*user["feature"][key]
-                    coeff_sum += val
-            # to here, this block is too low level
-            user["feature"][k] = res/coeff_sum
+            user["feature"][k] = self.compute_weighted_average(k, v)
         return user
 
-    def compute_weighted_average(self):
-        # TODO: code a function to handle the computation of high level features
-        pass
+    def compute_weighted_average(self, feature, coeff):
+        user = self.user
+        coeff_sum = 0
+        res = 0
+        for key, val in coeff.items():
+            if key not in user["feature"]:
+                user["feature"][key] = 0
+            if val < 0:
+                res += -val*(1-user["feature"][key])
+                coeff_sum += -val
+            else:
+                res += val*user["feature"][key]
+                coeff_sum += val
+        return res/coeff_sum
 
 
-class HighLevelEntropicFeatureCalculator(FeatureExtractor):
+class EntropicFeatureCalculator(FeatureExtractor):
     """
-    Computes Entropic High Level Features. Actually it only computes Entropy for the loyalty feature
+    Computes Entropic Features. Actually it only computes Entropy for the loyalty feature
     """
-    # TODO: make this class more general
+
     def __init__(self, user):
-        self.user = user
+        FeatureExtractor.__init__(self, user)
+        self.entropies = {
+                     "loyalty": [float(champ_count)/user["aggregate"]["Game"] for _, champ_count in user["aggregate"]["Champ"].items()],
+                     "position": [float(user["aggregate"][p])/user["aggregate"]["Game"] for p in ['Bot', 'Top', 'Mid', 'Jungle'] if p in user["aggregate"]],
+                     "role": [float(user["aggregate"][r])/user["aggregate"]["Game"] for r in ['Jungler', 'Soloer', 'Adc', 'Support'] if r in user["aggregate"]]
+                     }
 
     def apply(self):
-        self.user["feature"]["loyalty"] = self.entropy(self.user)
+        for k,v in self.entropies.items():
+            self.user["feature"][k] = self.entropy(v)
         return self.user
-
+ 
     @staticmethod
-    def entropy(user):
+    def entropy(vals):
         xlogx = lambda x: x * log(x) if x != 0 else 0
-        champs_normalized_vals = [float(champ_count)/user["aggregate"]["Game"] for _, champ_count in user["aggregate"]["Champ"].items()]
-        normalized_entropy = exp(sum(map(xlogx, champs_normalized_vals)))
+        normalized_entropy = exp(sum(map(xlogx, vals)))
         return normalized_entropy

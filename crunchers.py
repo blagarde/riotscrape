@@ -1,11 +1,13 @@
 from multiprocessing import Pool
-from aggregate_extractor import ChampionExtractor, QueueTypeExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor
+from aggregate_extractor import ChampionExtractor, QueueTypeExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor,\
+    RoleExtractor
 from elasticsearch.client import Elasticsearch
-from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, NB_PROCESSES, USER_DOCTYPE, RIOT_GAMES_INDEX, RIOT_USERS_INDEX
+from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, NB_PROCESSES, USER_DOCTYPE, RIOT_GAMES_INDEX, RIOT_USERS_INDEX,\
+    TO_CRUNCHER, TO_USERCRUNCHER
 from redis import StrictRedis as Buffer
 from user import User
 from elasticsearch import helpers
-from feature_extractor import AggregateDataNormalizer, HighLevelFeatureCalculator, HighLevelEntropicFeatureCalculator
+from feature_extractor import AggregateDataNormalizer, HighLevelFeatureCalculator, EntropicFeatureCalculator
 from abc import abstractmethod
 import json
 
@@ -60,20 +62,19 @@ class GameCruncher(Cruncher):
         Cruncher.__init__(self)
         self.gamesnotfound = set()
         self.AE = [QueueTypeExtractor, ChampionExtractor,
-                   ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor]
+                   ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor, RoleExtractor]
 
     def _end_crunching(self):
         req = self.buffer.pipeline()
         for i, ui in enumerate(self.USERS):
-            req.zadd("cruncher_out", i, ui)
+            req.zadd(TO_USERCRUNCHER, i, ui)
         req.execute()
 
     def _init_ids(self):
         p = self.buffer.pipeline()
         for _ in range(1000):
-            p.rpop('scraper_out')
+            p.rpop(TO_CRUNCHER)
         self.content = [i for i in p.execute() if i is not None]
-        self.USERS_ID = set(self.buffer.smembers('user_set'))
 
     def _get_content(self, games_id):
         body = {'ids': games_id}
@@ -81,9 +82,6 @@ class GameCruncher(Cruncher):
         return [game for game in games["docs"]]
 
     def _process_content(self, game):
-        if not game['found']:
-            self.gamesnotfound.add(game["_id"])
-            return
         for participant in game["_source"]["participantIdentities"]:
             self._process_participant(participant, game)
 
@@ -92,8 +90,6 @@ class GameCruncher(Cruncher):
             return
         else:
             user_id = participant["player"]["summonerId"]
-            if str(user_id) not in self.USERS_ID:
-                return
             try:
                 user = self.USERS[user_id]
             except KeyError:
@@ -121,11 +117,10 @@ class UserCruncher(Cruncher):
 
     def __init__(self):
         Cruncher.__init__(self)
-        self.FE = [AggregateDataNormalizer, HighLevelFeatureCalculator, HighLevelEntropicFeatureCalculator]
+        self.FE = [AggregateDataNormalizer, HighLevelFeatureCalculator, EntropicFeatureCalculator]
 
     def _init_ids(self):
-        self.content = self.buffer.pipeline().zrange('cruncher_out', 0, 1000).zremrangebyrank('cruncher_out', 0, 1000).execute()[0]
-        self.USERS_ID = self.buffer.smembers('user_set')
+        self.content = self.buffer.pipeline().zrange(TO_USERCRUNCHER, 0, 1000).zremrangebyrank(TO_USERCRUNCHER, 0, 1000).execute()[0]
 
     def _get_content(self, user_ids):
         body = {'ids': user_ids}
@@ -148,7 +143,8 @@ class UserCruncher(Cruncher):
                 "_index": RIOT_USERS_INDEX,
                 "_type": USER_DOCTYPE,
                 "doc": {"feature": user["feature"]},
-                "upsert": user}
+                "upsert": user
+                }
             yield query
 
     def _end_crunching(self):
@@ -160,6 +156,8 @@ def launch_cruncher(cruncher):
     cr.crunch()
 
 if __name__ == '__main__':
+#     #launch_cruncher(GameCruncher)
+#     launch_cruncher(UserCruncher)
     pool = Pool(processes=NB_PROCESSES)
     pool.map(launch_cruncher, [GameCruncher for _ in range(NB_PROCESSES*100)])
-    # pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES*100)])
+    #pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES*100)])
