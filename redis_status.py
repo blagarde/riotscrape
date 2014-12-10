@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from redis import StrictRedis
 from argparse import ArgumentParser
 
