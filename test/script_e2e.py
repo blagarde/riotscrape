@@ -5,6 +5,7 @@ import json
 from init_elasticsearch import init_elasticsearch_index, delete_elasticsearch_index
 from time import sleep
 
+
 class ScriptTests(unittest.TestCase):
     es = Elasticsearch([{'host': 'localhost', 'port': 9200}])
 
@@ -44,8 +45,8 @@ class ScriptTests(unittest.TestCase):
                 "_index": 'test_script',
                 "_type": 'user',
                 "script": "update_agg_data",
-                "params": {"data": json.dumps(d)},
-                }
+                "params": {"data": json.dumps(d)}
+            }
             yield query
 
     def get_user(self):
