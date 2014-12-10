@@ -61,7 +61,6 @@ class GameCruncher(Cruncher):
 
     def __init__(self):
         Cruncher.__init__(self)
-        self.gamesnotfound = set()
         self.AE = [QueueTypeExtractor, ChampionExtractor,
                    ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor, RoleExtractor]
 
@@ -157,7 +156,7 @@ def launch_cruncher(cruncher):
     cr.crunch()
 
 if __name__ == '__main__':
-#     #launch_cruncher(GameCruncher)
+    # launch_cruncher(GameCruncher)
 #     launch_cruncher(UserCruncher)
     pool = Pool(processes=NB_PROCESSES)
     pool.map(launch_cruncher, [GameCruncher for _ in range(NB_PROCESSES*100)])
