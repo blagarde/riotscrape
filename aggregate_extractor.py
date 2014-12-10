@@ -60,39 +60,25 @@ class AggregateExtractor(Extractor):
 class QueueTypeExtractor(AggregateExtractor):
 
     def apply(self):
-        if self.game['queueType'] in ['RANKED_SOLO_5x5', 'RANKED_PREMADE_5x5', 'RANKED_PREMADE_3x3',
-                                      'RANKED_TEAM_3x3', 'RANKED_TEAM_5x5']:
-            self.aggregate['nRanked'] += 1
-        self.aggregate['nGame'] += 1
+        self.aggregate['Game'] += 1
         return self.user
-
-
-class GameModeExtractor(AggregateExtractor):
-
-    def apply(self):
-        if self.is_classic_game():
-            self.aggregate['nClassicGame'] += 1
-        else:
-            self.aggregate['nSubGame'] += 1
-        return self.user
-
 
 class ChampionExtractor(AggregateExtractor):
 
     def apply(self):
         participant_id = self.get_participant_id(self.game, self.user["id"])
         participant = self.get_participant(self.game, participant_id)
-        self.aggregate['nChamp'][participant['championId']] += 1
+        self.aggregate['Champ'][participant['championId']] += 1
         return self.user
 
 
 class ParticipantStatsExtractor(AggregateExtractor):
-    P_STATS = [('nKills', 'kills'), ('nDeaths', 'deaths'), ('nAssists', 'assists'),
-               ('nCreepsTeam', 'neutralMinionsKilledTeamJungle'), ('nCreepsEnemy', 'neutralMinionsKilledEnemyJungle'),
-               ('nMinions', 'minionsKilled'), ('nPlayerTowers', 'towerKills'),  ('nLevel', 'champLevel'),
-               ('nWardsKilled', 'wardsKilled'), ('nWards', 'wardsPlaced'), ('nFirstBlood','firstBloodKill'), ('nFirstBloodAssist','firstBloodAssist'),
-               ('nKillingSprees', 'killingSprees'), ('nVisionWards', 'visionWardsBoughtInGame'), ('nCrowedControl','totalTimeCrowdControlDealt'),
-               ('nGold','goldEarned'), ('nPlayerInhibitor','inhibitorKills')]
+    P_STATS = [('Kills', 'kills'), ('Deaths', 'deaths'), ('Assists', 'assists'),
+               ('CreepsTeam', 'eutralMinionsKilledTeamJungle'), ('CreepsEnemy', 'eutralMinionsKilledEnemyJungle'),
+               ('Minions', 'minionsKilled'), ('PlayerTowers', 'towerKills'),  ('Level', 'champLevel'),
+               ('WardsKilled', 'wardsKilled'), ('Wards', 'wardsPlaced'), ('FirstBlood','firstBloodKill'), ('FirstBloodAssist','firstBloodAssist'),
+               ('KillingSprees', 'killingSprees'), ('VisionWards', 'visionWardsBoughtInGame'), ('CrowedControl','totalTimeCrowdControlDealt'),
+               ('Gold','goldEarned'), ('PlayerInhibitor','inhibitorKills')]
 
     @classic_game_only
     def apply(self):
@@ -105,9 +91,9 @@ class ParticipantStatsExtractor(AggregateExtractor):
 
 
 class TeamStatsExtractor(AggregateExtractor):
-    T_STATS = [('nDragons', 'dragonKills'), ('nBarons', 'baronKills'),
-               ('nInhibitor', 'inhibitorKills'), ('nVictory', 'winner'),
-               ('nTowers','towerKills')]
+    T_STATS = [('Dragons', 'dragonKills'), ('Barons', 'baronKills'),
+               ('Inhibitor', 'inhibitorKills'), ('Victory', 'winner'),
+               ('Towers','towerKills')]
 
     @classic_game_only
     def apply(self):
@@ -120,7 +106,7 @@ class TeamStatsExtractor(AggregateExtractor):
 
 
 class LaneExtractor(AggregateExtractor):
-    LANE_CONV = {'MIDDLE': 'nMid', 'TOP': 'nTop', 'BOTTOM': 'nBot', 'JUNGLE': 'nJungle'}
+    LANE_CONV = {'MIDDLE': 'Mid', 'TOP': 'Top', 'BOTTOM': 'Bot', 'JUNGLE': 'Jungle'}
 
     @classic_game_only
     def apply(self):

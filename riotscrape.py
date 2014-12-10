@@ -136,6 +136,8 @@ class WatcherThread(Thread):
                 self.process_tasks('game', games)
                 self.process_tasks('user', users)
                 bulk_upsert(self.ES, RIOT_GAMES_INDEX, GAME_DOCTYPE, self.scraped_games, id_fieldname='matchId')
+                if games:
+                    Tasks.redis.lpush(TO_CRUNCHER, *games)
                 # Report game and user IDs seen during this cycle
                 Tasks.add(set(self.games), set(self.users))
             except:
@@ -177,8 +179,7 @@ class WatcherThread(Thread):
         dumpme = self.watcher.get_match(gameid, region=EUROPE_WEST, include_timeline=True)
         participants = [dct['player']['summonerId'] for dct in dumpme['participantIdentities']]
         self.users += participants
-        self.scraped_games += [dumpme]
-        Tasks.redis.lpush(TO_CRUNCHER, json.dumps(dumpme))
+        self.scraped_games += [gameid]
 
     @staticmethod
     def is_ranked(game_dct):
