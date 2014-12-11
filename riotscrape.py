@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import os
 from threading import Thread, Lock
 from collections import defaultdict
 from config import KEYS, ES_NODES, GAME_DOCTYPE, RIOT_GAMES_INDEX, TO_CRUNCHER
@@ -79,7 +78,7 @@ class Tasks(object):
             new_games = [g for g, is_old in cls.redis._intersect(GAME_SET, games) if not is_old]
 
             users = cls.redis._bulk_rpop(USER_QUEUE, NTASKS - len(new_games))
-            users = [u for u, is_old in cls.redis._intersect(USER_SET, users)]
+            cls.redis.lpush(USER_QUEUE, *users)  # Rotate users
 
             return new_games, users
 
@@ -92,13 +91,6 @@ class Tasks(object):
                 cls.redis.lpush(GAME_QUEUE, *new_games)
 
             # TODO - add a user to redis if not seen for a long time
-            new_users = [u for u, is_old in cls.redis._intersect(USER_SET, users, insert=False) if not is_old]
-            if new_users:
-                cls.redis.lpush(USER_QUEUE, *new_users)
-
-            with open(ALL_USERS, 'a') as ufh:
-                for u in new_users:
-                    ufh.write("%s\n" % u)
 
             cls.total_games += len(games)
             cls.new_games += len(new_games)
@@ -112,7 +104,6 @@ class Tasks(object):
                 cls.redis.rpush(GAME_QUEUE, *games)
 
             if users:
-                cls.redis.srem(USER_SET, *users)
                 cls.redis.rpush(USER_QUEUE, *users)
 
 
