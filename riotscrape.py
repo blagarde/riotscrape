@@ -5,7 +5,7 @@ from collections import defaultdict
 from config import KEYS, ES_NODES, GAME_DOCTYPE, RIOT_GAMES_INDEX, TO_CRUNCHER
 from config import RIOT_USERS_INDEX, USER_DOCTYPE
 from config import REDIS_PARAM, GAME_SET, USER_SET, GAME_QUEUE, USER_QUEUE
-from riotwatcher import RiotWatcher, EUROPE_WEST, RateLimit
+from riotwatcher import RiotWatcher, EUROPE_WEST, RateLimit, LoLException
 from elasticsearch import Elasticsearch
 from time import sleep
 from redis import StrictRedis
@@ -159,7 +159,10 @@ class WatcherThread(Thread):
                 if self.watcher.can_make_request():
                     task = getattr(self, 'do_' + taskname)
                     logging.info("Task:\t%s\t%s" % (taskname, arg))
-                    task(arg)
+                    try:
+                        task(arg)
+                    except LoLException as e:
+                        logging.error("Could not process %s %s: %s" % (taskname, arg, e))
                     break
                 else:
                     sleep(0.001)
