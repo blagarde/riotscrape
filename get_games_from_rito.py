@@ -1,28 +1,5 @@
-from elasticsearch import Elasticsearch
-from config import ES_NODES
 from argparse import ArgumentParser
-
-
-def get_ids(index, doctype):
-    es = Elasticsearch(ES_NODES)
-    r = []
-    req = {"fields": [], "query": {"match_all": {}}}
-
-    resp1 = es.search(body=req, index=index, doc_type=doctype, size=3000, search_type="scan", scroll="1m")
-    scroll = resp1["_scroll_id"]
-    try:
-        while True:
-            resp2 = es.scroll(scroll_id=scroll, scroll="1m")
-            if resp2["hits"]["hits"] == []:
-                break
-            for gid in resp2["hits"]["hits"]:
-                r.append(gid["_id"])
-            print len(r)
-            scroll = resp2["_scroll_id"]
-    except Exception as e:
-        print e
-    print len(r)
-    return r
+from es_utils import get_ids
 
 
 if __name__ == "__main__":
