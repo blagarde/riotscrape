@@ -17,7 +17,7 @@ class GameCounterThread(Thread):
         while self.keep_going:
             ES = Elasticsearch(ES_NODES)
             users = helpers.scan(client=ES, query={}, scroll="10m", index=RIOT_USERS_INDEX, doc_type='user', timeout="10m")
-            cnt = Counter([u['_source']['aggregate']['nGame'] for u in users])
+            cnt = Counter([u['_source']['aggregate']['Game'] for u in users])
             dump = json.dumps(dict(cnt))
             logging.info("GAME COUNTS:\t" + dump)
             for i in range(STEP):
