@@ -26,6 +26,11 @@ class CustomRedis(StrictRedis):
 
     def init(self, cruncher_hasrun=True):
         print("**LOAD**\n")
+        try:
+            all_users = load_as_set(ALL_USERS)
+            self._bulk_sadd(USER_SET, all_users)
+        except:
+            raise SystemExit("Failed to load users from file: %s" % ALL_USERS)
         scraped_games = get_ids(RIOT_GAMES_INDEX, GAME_DOCTYPE)
         if cruncher_hasrun:
             crunched_games = get_ids(RIOT_USERS_INDEX, USER_DOCTYPE, nested_field='games_id_list')
@@ -34,8 +39,6 @@ class CustomRedis(StrictRedis):
             self.delete(key)
         self._bulk_sadd(GAME_SET, scraped_games)
 
-        all_users = load_as_set(ALL_USERS)
-        self._bulk_sadd(USER_SET, all_users)
         self.lpush(USER_QUEUE, *all_users)
         print("**START**\n")
 
