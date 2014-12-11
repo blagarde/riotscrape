@@ -15,6 +15,7 @@ from log import init_logging
 from utils import split_seq, load_as_set
 from argparse import ArgumentParser
 from es_utils import bulk_upsert, get_ids
+from tempfile import mkstemp
 
 
 ALL_USERS = '100k_users.txt'  # arbitrary
@@ -24,7 +25,7 @@ class CustomRedis(StrictRedis):
     '''Redis pimped up with a few bulk operations
     WATCH OUT - NOT THREAD SAFE. LOCKING IS YOUR OWN RESPONSIBILITY'''
 
-    def init(self, cruncher_hasrun=True):
+    def init(self, sync_with_cruncher=True):
         print("**LOAD**\n")
         try:
             all_users = load_as_set(ALL_USERS)
@@ -32,9 +33,18 @@ class CustomRedis(StrictRedis):
         except:
             raise SystemExit("Failed to load users from file: %s" % ALL_USERS)
         scraped_games = get_ids(RIOT_GAMES_INDEX, GAME_DOCTYPE)
-        if cruncher_hasrun:
+        if sync_with_cruncher:
             crunched_games = get_ids(RIOT_USERS_INDEX, USER_DOCTYPE, nested_field='games_id_list')
-            assert crunched_games == scraped_games
+            only_in_cruncher = crunched_games.difference(scraped_games)
+            assert len(only_in_cruncher) == 0
+            only_in_scraper = scraped_games.difference(crunched_games)
+            if len(only_in_scraper) > 0:
+                _, tmp_path = mkstemp()
+                with open(tmp_path, 'w') as fh:
+                    for gid in only_in_scraper:
+                        fh.write(gid + '\n')
+                tpl = (len(only_in_scraper), tmp_path)
+                raise SystemExit('Please crunch these before running the scraper (%s games): %s' % tpl)
         for key in GAME_QUEUE, GAME_SET, USER_QUEUE, USER_SET:
             self.delete(key)
         self._bulk_sadd(GAME_SET, scraped_games)
@@ -220,6 +230,7 @@ class Scraper(object):
 if __name__ == "__main__":
     ap = ArgumentParser(description="Scrape games from the Riot API")
     ap.add_argument('-i', '--init', action="store_true", help="Initialize Redis stacks with the contents of game and user files")
+    ap.add_argument('-s', '--sync', action="store_true", help="During initialization, compare games in Scraper output with Cruncher output")
     args = ap.parse_args()
 
     init_logging()
