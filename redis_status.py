@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 from redis import StrictRedis
 from argparse import ArgumentParser
+import datetime
 
 
 def main():
+    print "Redis status as of:", datetime.datetime.now()
     ap = ArgumentParser(description="List a summary of Redis data structures")
     ap.add_argument('-H', '--host', default='localhost')
     ap.add_argument('-p', '--port', default=6379)
@@ -13,10 +15,11 @@ def main():
         for kind, count in ('list', r.llen), ('sset', r.zcard), ('set', r.scard), ('hash', r.hlen):
             try:
                 cnt = count(k)
-                print "[%-4s] %-15s %s" % (kind, k, cnt)
+                print "[%-4s] %-25s %s" % (kind, k, cnt)
             except:
                 pass
 
 
 if __name__ == "__main__":
     main()
+
