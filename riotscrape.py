@@ -121,7 +121,7 @@ class WatcherThread(Thread):
         self._remaining_cycles = kwargs.pop("cycles", None)  # 'None' means "loop forever"
         self.reqs = defaultdict(int)
         self.watcher = RiotWatcher(key, limits=(RateLimit(10, 10), RateLimit(500, 600)))
-        self.ES = Elasticsearch(ES_NODES)
+        self.ES = Elasticsearch(ES_NODES, timeout=30)
         super(WatcherThread, self).__init__(*args, **kwargs)
 
     def run(self):
