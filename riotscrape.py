@@ -141,8 +141,9 @@ class WatcherThread(Thread):
                 self.process_tasks('game', games)
                 self.process_tasks('user', users)
                 bulk_upsert(self.ES, RIOT_GAMES_INDEX, GAME_DOCTYPE, self.scraped_games, id_fieldname='matchId')
-                if games:
-                    Tasks.redis.lpush(TO_CRUNCHER, *games)
+                scraped_game_ids = [g['matchId'] for g in self.scraped_games]
+                if scraped_game_ids:
+                    Tasks.redis.lpush(TO_CRUNCHER, *scraped_game_ids)
                 # Report game and user IDs seen during this cycle
                 Tasks.add(set(self.games), set(self.users))
             except Exception as e:
