@@ -36,7 +36,7 @@ def get_ids(index, doctype, nested_field=None):
             if resp2["hits"]["hits"] == []:
                 break
             for res in resp2["hits"]["hits"]:
-                lst = [res["_id"]] if nested_field is None else res['fields'][nested_field]
+                lst = [int(res["_id"])] if nested_field is None else res['fields'][nested_field]
                 r |= set(lst)
             print len(r)
             scroll = resp2["_scroll_id"]
