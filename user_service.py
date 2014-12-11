@@ -1,6 +1,5 @@
-from aggregate_extractor import ChampionExtractor, GameModeExtractor,\
-    QueueTypeExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor
-from feature_extractor import ProbaExtractor, RulesExtractor
+from aggregate_extractor import ChampionExtractor, RoleExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor, QueueTypeExtractor
+from feature_extractor import AggregateDataNormalizer, HighLevelFeatureCalculator, EntropicFeatureCalculator
 from griotwatcher.riotwatcher import RiotWatcher, LoLException
 from user import User
 from time import sleep, time
@@ -35,7 +34,8 @@ class UserService(object):
             return 'ID_NOT_FOUND'
 
     def _get_user_from_es(self, summoner_id):
-        user = self.es.get(id=summoner_id, index='rita', doc_type='user')["_source"]
+        user = self.es.get(id=summoner_id, index='riotusers', doc_type='user')["_source"]
+        print user
         if not self.features_are_computed(user):
             luc = LiteUserCruncher(user)
             return '200', luc.crunch()
@@ -46,6 +46,7 @@ class UserService(object):
         games = self._get_games(game_ids, region)
         lgc = LiteGameCruncher(summoner_id, games)
         user = lgc.crunch()
+        print user
         if user.is_valid():
             luc = LiteUserCruncher(user)
             user = luc.crunch()
@@ -81,7 +82,7 @@ class UserService(object):
 
 
 class LiteUserCruncher(object):
-    FE = [ProbaExtractor, RulesExtractor]
+    FE = [AggregateDataNormalizer, HighLevelFeatureCalculator, EntropicFeatureCalculator]
 
     def __init__(self, user):
         self.user = user
@@ -96,8 +97,7 @@ class LiteUserCruncher(object):
 
 
 class LiteGameCruncher(object):
-    AE = [QueueTypeExtractor, GameModeExtractor, ChampionExtractor,
-          ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor]
+    AE = [ChampionExtractor, RoleExtractor, LaneExtractor, ParticipantStatsExtractor, TeamStatsExtractor, QueueTypeExtractor]
 
     def __init__(self, summoner_id, games):
         self.summoner_id = summoner_id

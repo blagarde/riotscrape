@@ -4,8 +4,8 @@ from cluster_service import ClusterService
 import json
 
 ## these should go to config once we know where to store / how to store them
-scaler_file = "labelling_files/scaler_9g"
-clf_file = "labelling_files/clf_9g"
+scaler_file = "labelling_files/scaler.pkl"
+clf_file = "labelling_files/clf.pkl"
 
 us = UserService()
 cs = ClusterService(scaler_file, clf_file)

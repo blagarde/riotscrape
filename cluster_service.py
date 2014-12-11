@@ -32,7 +32,7 @@ class ClusterService(object):
             label = int(self.clf.get_label(u_s)[0])
             return label
         else:
-            print "Error: unable to translate user"
+            print "Error: ClusterService: unable to translate user"
             return -1
     
     def _load(self, fn):
