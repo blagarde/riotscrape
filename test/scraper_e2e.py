@@ -28,7 +28,7 @@ class ThreadingTests(TestCase):
         print USER_SET, Tasks.redis.scard(USER_SET)
         print TO_CRUNCHER, Tasks.redis.llen(TO_CRUNCHER)
         Tasks.new_games = 0
-        raw_input("About to delete the above-listed Redis keys. CTRL-C to abort, <enter> to continue.")
+        print "Deleting the above-listed Redis keys."
         for key in GAME_QUEUE, USER_QUEUE, GAME_SET, USER_SET, TO_CRUNCHER:
             Tasks.redis.delete(key)
         self.es.delete_by_query(index=TEST_ES_INDEX, doc_type=GAME_DOCTYPE, body={"query": {"match_all": {}}})
