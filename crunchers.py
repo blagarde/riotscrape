@@ -6,6 +6,7 @@ from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, NB_PROCESSES, USER_DOCTY
     TO_CRUNCHER, TO_USERCRUNCHER
 from redis import StrictRedis as Buffer
 from user import User
+from cluster_service import ClusterService
 from elasticsearch import helpers
 from feature_extractor import AggregateDataNormalizer, HighLevelFeatureCalculator, EntropicFeatureCalculator
 from abc import abstractmethod
@@ -60,7 +61,6 @@ class GameCruncher(Cruncher):
 
     def __init__(self):
         Cruncher.__init__(self)
-        self.gamesnotfound = set()
         self.AE = [QueueTypeExtractor, ChampionExtractor,
                    ParticipantStatsExtractor, TeamStatsExtractor, LaneExtractor, RoleExtractor]
 
@@ -156,8 +156,9 @@ def launch_cruncher(cruncher):
     cr.crunch()
 
 if __name__ == '__main__':
-#     #launch_cruncher(GameCruncher)
+    # launch_cruncher(GameCruncher)
 #     launch_cruncher(UserCruncher)
     pool = Pool(processes=NB_PROCESSES)
     pool.map(launch_cruncher, [GameCruncher for _ in range(NB_PROCESSES*100)])
+    # pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES*100)])
     #pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES*100)])

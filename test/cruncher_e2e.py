@@ -16,7 +16,7 @@ class CruncherTests(unittest.TestCase):
         if not TESTING:
             raise EnvironmentError("You are not in testing mode, you could have deleted the prod instances!")
         print "WARNING : the script update_agg_data.py needs to be in the config/scripts folder of your local ES instance or cruncher tests will fail"
-        init_redis_for_testing_cruncher("game_id_sample.txt", "user_sample.txt")
+        init_redis_for_testing_cruncher("game_id_sample.txt")
         init_elasticsearch_for_testing_cruncher()
         sleep(1)
 

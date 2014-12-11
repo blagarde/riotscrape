@@ -17,13 +17,11 @@ def delete_elasticsearch_index(test_index_name):
     es.indices.delete(index=test_index_name)
 
 
-
-
 def init_elasticsearch_for_testing_cruncher():
     # mock rito index
     init_elasticsearch_index(RIOT_GAMES_INDEX)
     es = Elasticsearch(ES_NODES)
-    with open('game_sample.txt', 'r') as f:
+    with open('test/game_sample.txt', 'r') as f:
         game = json.loads(f.read())
     es.index(index=RIOT_GAMES_INDEX, doc_type=GAME_DOCTYPE, body=game, id=game["matchId"])
     # mock rita index
