@@ -6,7 +6,7 @@ from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, NB_PROCESSES, USER_DOCTY
     TO_CRUNCHER, TO_USERCRUNCHER
 from redis import StrictRedis as Buffer
 from user import User
-from cluster_service import ClusterService
+from argparse impor ArgumentParser
 from elasticsearch import helpers
 from feature_extractor import AggregateDataNormalizer, HighLevelFeatureCalculator, EntropicFeatureCalculator
 from abc import abstractmethod
@@ -144,7 +144,7 @@ class UserCruncher(Cruncher):
                 "_type": USER_DOCTYPE,
                 "doc": {"feature": user["feature"]},
                 "upsert": user
-                }
+            }
             yield query
 
     def _end_crunching(self):
@@ -155,9 +155,17 @@ def launch_cruncher(cruncher):
     cr = cruncher()
     cr.crunch()
 
+
 if __name__ == '__main__':
-    # launch_cruncher(GameCruncher)
-#     launch_cruncher(UserCruncher)
-    pool = Pool(processes=NB_PROCESSES)
-    #pool.map(launch_cruncher, [GameCruncher for _ in range(NB_PROCESSES*100)])
-    pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES*100)])
+    ap = ArgumentParser(description="Crunch games and users")
+    ap.add_argument('-p', '--processes', type=int, default=NB_PROCESSES, help="Multiprocess")
+    args = ap.parse_args()
+    if args.processes == 1:
+        launch_cruncher(GameCruncher)
+        launch_cruncher(UserCruncher)
+    else:
+        pool = Pool(processes=NB_PROCESSES)
+        while True:
+            for _ in range(100):
+                pool.map(launch_cruncher, [GameCruncher for _ in range(NB_PROCESSES)])
+            pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES)])
