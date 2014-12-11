@@ -81,7 +81,8 @@ class Tasks(object):
             new_games = [g for g, is_old in cls.redis._intersect(GAME_SET, games) if not is_old]
 
             users = cls.redis._bulk_rpop(USER_QUEUE, NTASKS - len(new_games))
-            cls.redis.lpush(USER_QUEUE, *users)  # Rotate users
+            if users:
+                cls.redis.lpush(USER_QUEUE, *users)  # Rotate users
 
             return new_games, users
 
