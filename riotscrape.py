@@ -42,7 +42,7 @@ class CustomRedis(StrictRedis):
                 _, tmp_path = mkstemp()
                 with open(tmp_path, 'w') as fh:
                     for gid in only_in_scraper:
-                        fh.write(gid + '\n')
+                        fh.write('%s\n' % gid)
                 tpl = (len(only_in_scraper), tmp_path)
                 raise SystemExit('Please crunch these before running the scraper (%s games): %s' % tpl)
         for key in GAME_QUEUE, GAME_SET, USER_QUEUE, USER_SET:
