@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import os
 from threading import Thread, Lock
 from collections import defaultdict
 from config import KEYS, ES_NODES, GAME_DOCTYPE, RIOT_GAMES_INDEX, TO_CRUNCHER
+from config import RIOT_USERS_INDEX, USER_DOCTYPE
 from config import REDIS_PARAM, GAME_SET, USER_SET, GAME_QUEUE, USER_QUEUE
 from riotwatcher import RiotWatcher, EUROPE_WEST, RateLimit
 from elasticsearch import Elasticsearch
@@ -13,26 +15,25 @@ from report import GameCounterThread
 from log import init_logging
 from utils import split_seq, load_as_set
 from argparse import ArgumentParser
-from es_utils import bulk_upsert
+from es_utils import bulk_upsert, get_ids
 
 
 ALL_USERS = '100k_users.txt'  # arbitrary
-ALL_GAMES = 'games.txt'  # all IDs we know about
-DONE_GAMES = 'gamesrito.txt'  # in rito
 
 
 class CustomRedis(StrictRedis):
     '''Redis pimped up with a few bulk operations
     WATCH OUT - NOT THREAD SAFE. LOCKING IS YOUR OWN RESPONSIBILITY'''
 
-    def init(self):
+    def init(self, cruncher_hasrun=True):
         print("**LOAD**\n")
-        all_games = load_as_set(ALL_GAMES)
-        done_games = load_as_set(DONE_GAMES)
-        self._bulk_sadd(GAME_SET, done_games)
-        new_games = all_games.difference(done_games)
-        if new_games:
-            self.lpush(GAME_QUEUE, *new_games)
+        scraped_games = get_ids(RIOT_GAMES_INDEX, GAME_DOCTYPE)
+        if cruncher_hasrun:
+            crunched_games = get_ids(RIOT_USERS_INDEX, USER_DOCTYPE, nested_field='games_id_list')
+            assert crunched_games == scraped_games
+        for key in GAME_QUEUE, GAME_SET, USER_QUEUE, USER_SET:
+            self.delete(key)
+        self._bulk_sadd(GAME_SET, scraped_games)
 
         all_users = load_as_set(ALL_USERS)
         self._bulk_sadd(USER_SET, all_users)
