@@ -158,5 +158,5 @@ if __name__ == '__main__':
     # launch_cruncher(GameCruncher)
 #     launch_cruncher(UserCruncher)
     pool = Pool(processes=NB_PROCESSES)
-    pool.map(launch_cruncher, [GameCruncher for _ in range(NB_PROCESSES*100)])
-    #pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES*100)])
+    #pool.map(launch_cruncher, [GameCruncher for _ in range(NB_PROCESSES*100)])
+    pool.map(launch_cruncher, [UserCruncher for _ in range(NB_PROCESSES*100)])

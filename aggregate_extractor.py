@@ -75,12 +75,12 @@ class ChampionExtractor(AggregateExtractor):
 
 class ParticipantStatsExtractor(AggregateExtractor):
     P_STATS = [('Kills', 'kills'), ('Deaths', 'deaths'), ('Assists', 'assists'),
-               ('CreepsTeam', 'eutralMinionsKilledTeamJungle'), ('CreepsEnemy', 'eutralMinionsKilledEnemyJungle'),
+               ('CreepsTeam', 'neutralMinionsKilledTeamJungle'), ('CreepsEnemy', 'neutralMinionsKilledEnemyJungle'),
                ('Minions', 'minionsKilled'), ('PlayerTowers', 'towerKills'),  ('Level', 'champLevel'),
                ('WardsKilled', 'wardsKilled'), ('Wards', 'wardsPlaced'), ('FirstBlood', 'firstBloodKill'),
                ('FirstBloodAssist', 'firstBloodAssist'), ('KillingSprees', 'killingSprees'),
                ('VisionWards', 'visionWardsBoughtInGame'), ('CrowedControl', 'totalTimeCrowdControlDealt'),
-               ('Gold', 'goldEarned'), ('PlayerInhibitor', 'inhibitorKills')]
+               ('Gold', 'goldEarned'), ('PlayerInhibitors', 'inhibitorKills')]
 
     @classic_game_only
     def apply(self):
@@ -94,7 +94,7 @@ class ParticipantStatsExtractor(AggregateExtractor):
 
 class TeamStatsExtractor(AggregateExtractor):
     T_STATS = [('Dragons', 'dragonKills'), ('Barons', 'baronKills'),
-               ('Inhibitor', 'inhibitorKills'), ('Victory', 'winner'),
+               ('Inhibitors', 'inhibitorKills'), ('Victory', 'winner'),
                ('Towers','towerKills')]
 
     @classic_game_only
