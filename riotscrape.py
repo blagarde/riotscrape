@@ -3,6 +3,7 @@
 from threading import Thread, Lock
 from collections import defaultdict
 from config import KEYS, ES_NODES, GAME_DOCTYPE, RIOT_GAMES_INDEX, TO_CRUNCHER
+from config import RIOT_USERS_INDEX, USER_DOCTYPE
 from config import REDIS_PARAM, GAME_SET, USER_SET, GAME_QUEUE, USER_QUEUE
 from riotwatcher import RiotWatcher, EUROPE_WEST, RateLimit
 from elasticsearch import Elasticsearch
@@ -13,29 +14,41 @@ from report import GameCounterThread
 from log import init_logging
 from utils import split_seq, load_as_set
 from argparse import ArgumentParser
-from es_utils import bulk_upsert
+from es_utils import bulk_upsert, get_ids
+from tempfile import mkstemp
 
 
 ALL_USERS = '100k_users.txt'  # arbitrary
-ALL_GAMES = 'games.txt'  # all IDs we know about
-DONE_GAMES = 'gamesrito.txt'  # in rito
 
 
 class CustomRedis(StrictRedis):
     '''Redis pimped up with a few bulk operations
     WATCH OUT - NOT THREAD SAFE. LOCKING IS YOUR OWN RESPONSIBILITY'''
 
-    def init(self):
+    def init(self, sync_with_cruncher=True):
         print("**LOAD**\n")
-        all_games = load_as_set(ALL_GAMES)
-        done_games = load_as_set(DONE_GAMES)
-        self._bulk_sadd(GAME_SET, done_games)
-        new_games = all_games.difference(done_games)
-        if new_games:
-            self.lpush(GAME_QUEUE, *new_games)
+        try:
+            all_users = load_as_set(ALL_USERS)
+            self._bulk_sadd(USER_SET, all_users)
+        except:
+            raise SystemExit("Failed to load users from file: %s" % ALL_USERS)
+        scraped_games = get_ids(RIOT_GAMES_INDEX, GAME_DOCTYPE)
+        if sync_with_cruncher:
+            crunched_games = get_ids(RIOT_USERS_INDEX, USER_DOCTYPE, nested_field='games_id_list')
+            only_in_cruncher = crunched_games.difference(scraped_games)
+            assert len(only_in_cruncher) == 0
+            only_in_scraper = scraped_games.difference(crunched_games)
+            if len(only_in_scraper) > 0:
+                _, tmp_path = mkstemp()
+                with open(tmp_path, 'w') as fh:
+                    for gid in only_in_scraper:
+                        fh.write(gid + '\n')
+                tpl = (len(only_in_scraper), tmp_path)
+                raise SystemExit('Please crunch these before running the scraper (%s games): %s' % tpl)
+        for key in GAME_QUEUE, GAME_SET, USER_QUEUE, USER_SET:
+            self.delete(key)
+        self._bulk_sadd(GAME_SET, scraped_games)
 
-        all_users = load_as_set(ALL_USERS)
-        self._bulk_sadd(USER_SET, all_users)
         self.lpush(USER_QUEUE, *all_users)
         print("**START**\n")
 
@@ -78,7 +91,8 @@ class Tasks(object):
             new_games = [g for g, is_old in cls.redis._intersect(GAME_SET, games) if not is_old]
 
             users = cls.redis._bulk_rpop(USER_QUEUE, NTASKS - len(new_games))
-            users = [u for u, is_old in cls.redis._intersect(USER_SET, users)]
+            if users:
+                cls.redis.lpush(USER_QUEUE, *users)  # Rotate users
 
             return new_games, users
 
@@ -91,13 +105,6 @@ class Tasks(object):
                 cls.redis.lpush(GAME_QUEUE, *new_games)
 
             # TODO - add a user to redis if not seen for a long time
-            new_users = [u for u, is_old in cls.redis._intersect(USER_SET, users, insert=False) if not is_old]
-            if new_users:
-                cls.redis.lpush(USER_QUEUE, *new_users)
-
-            with open(ALL_USERS, 'a') as ufh:
-                for u in new_users:
-                    ufh.write("%s\n" % u)
 
             cls.total_games += len(games)
             cls.new_games += len(new_games)
@@ -111,7 +118,6 @@ class Tasks(object):
                 cls.redis.rpush(GAME_QUEUE, *games)
 
             if users:
-                cls.redis.srem(USER_SET, *users)
                 cls.redis.rpush(USER_QUEUE, *users)
 
 
@@ -121,7 +127,7 @@ class WatcherThread(Thread):
         self._remaining_cycles = kwargs.pop("cycles", None)  # 'None' means "loop forever"
         self.reqs = defaultdict(int)
         self.watcher = RiotWatcher(key, limits=(RateLimit(10, 10), RateLimit(500, 600)))
-        self.ES = Elasticsearch(ES_NODES)
+        self.ES = Elasticsearch(ES_NODES, timeout=30)
         super(WatcherThread, self).__init__(*args, **kwargs)
 
     def run(self):
@@ -224,6 +230,7 @@ class Scraper(object):
 if __name__ == "__main__":
     ap = ArgumentParser(description="Scrape games from the Riot API")
     ap.add_argument('-i', '--init', action="store_true", help="Initialize Redis stacks with the contents of game and user files")
+    ap.add_argument('-s', '--sync', action="store_true", help="During initialization, compare games in Scraper output with Cruncher output")
     args = ap.parse_args()
 
     init_logging()

@@ -6,6 +6,7 @@ from config import ES_NODES, REDIS_PARAM, GAME_DOCTYPE, NB_PROCESSES, USER_DOCTY
     TO_CRUNCHER, TO_USERCRUNCHER
 from redis import StrictRedis as Buffer
 from user import User
+from cluster_service import ClusterService
 from elasticsearch import helpers
 from feature_extractor import AggregateDataNormalizer, HighLevelFeatureCalculator, EntropicFeatureCalculator
 from abc import abstractmethod
