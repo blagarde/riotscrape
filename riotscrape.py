@@ -5,7 +5,7 @@ from collections import defaultdict
 from config import KEYS, ES_NODES, GAME_DOCTYPE, RIOT_GAMES_INDEX, TO_CRUNCHER
 from config import RIOT_USERS_INDEX, USER_DOCTYPE
 from config import REDIS_PARAM, GAME_SET, USER_SET, GAME_QUEUE, USER_QUEUE
-from riotwatcher import RiotWatcher, EUROPE_WEST, RateLimit
+from riotwatcher import RiotWatcher, EUROPE_WEST, RateLimit, LoLException
 from elasticsearch import Elasticsearch
 from time import sleep
 from redis import StrictRedis
@@ -42,7 +42,7 @@ class CustomRedis(StrictRedis):
                 _, tmp_path = mkstemp()
                 with open(tmp_path, 'w') as fh:
                     for gid in only_in_scraper:
-                        fh.write(gid + '\n')
+                        fh.write('%s\n' % gid)
                 tpl = (len(only_in_scraper), tmp_path)
                 raise SystemExit('Please crunch these before running the scraper (%s games): %s' % tpl)
         for key in GAME_QUEUE, GAME_SET, USER_QUEUE, USER_SET:
@@ -141,8 +141,9 @@ class WatcherThread(Thread):
                 self.process_tasks('game', games)
                 self.process_tasks('user', users)
                 bulk_upsert(self.ES, RIOT_GAMES_INDEX, GAME_DOCTYPE, self.scraped_games, id_fieldname='matchId')
-                if games:
-                    Tasks.redis.lpush(TO_CRUNCHER, *games)
+                scraped_game_ids = [g['matchId'] for g in self.scraped_games]
+                if scraped_game_ids:
+                    Tasks.redis.lpush(TO_CRUNCHER, *scraped_game_ids)
                 # Report game and user IDs seen during this cycle
                 Tasks.add(set(self.games), set(self.users))
             except Exception as e:
@@ -159,7 +160,10 @@ class WatcherThread(Thread):
                 if self.watcher.can_make_request():
                     task = getattr(self, 'do_' + taskname)
                     logging.info("Task:\t%s\t%s" % (taskname, arg))
-                    task(arg)
+                    try:
+                        task(arg)
+                    except LoLException as e:
+                        logging.error("Could not process %s %s: %s" % (taskname, arg, e))
                     break
                 else:
                     sleep(0.001)
